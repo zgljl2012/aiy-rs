@@ -1,13 +1,20 @@
 
+use std::time::SystemTime;
+
 use anyhow::Ok;
 use diffusers::models::{vae, unet_2d};
+use diffusers::schedulers::PredictionType;
+use diffusers::schedulers::ddim::{self, DDIMSchedulerConfig};
 use diffusers::transformers::clip::{Tokenizer, Config};
 use diffusers::transformers::clip;
 use tch::nn::Module;
 use regex;
-use tch::{Tensor, Device};
+use tch::{Tensor, Device, Kind};
 
+use crate::utils::output_filename;
 use crate::{bpe::Bpe, utils::get_device};
+
+const GUIDANCE_SCALE: f64 = 7.5;
 
 const PAT: &str =
     r"<\|startoftext\|>|<\|endoftext\|>|'s|'t|'re|'ve|'m|'ll|'d|[\p{L}]+|[\p{N}]|[^\s\p{L}\p{N}]+";
@@ -19,7 +26,7 @@ pub struct AiyConfig {
     pub clip_config: Config,
     pub vae_weights_path: String,
     pub unet_weights_path: String,
-    pub unet_config: unet_2d::UNet2DConditionModelConfig
+    pub unet_config: unet_2d::UNet2DConditionModelConfig,
 }
 
 pub struct AiyStableDiffusion {
@@ -136,6 +143,66 @@ impl AiyStableDiffusion {
             unet_2d::UNet2DConditionModel::new(vs_unet.root(), in_channels, 4, unet_cfg);
         vs_unet.load(unet_weights)?;
         Ok(unet)
+    }
+
+    fn build_scheduler(n_steps: usize, config: DDIMSchedulerConfig) -> ddim::DDIMScheduler {
+        ddim::DDIMScheduler::new(n_steps, config)
+    }
+
+    pub fn run(&self, prompt: &str, negative_prompt: &str, final_image: &str, intermediary_images: bool, n_steps: usize, num_samples: i64, seed: i64, width: i64, height: i64, prediction_type: Option<PredictionType>) -> anyhow::Result<()> {
+        let text_embeddings = self.embed_prompts(prompt, negative_prompt)?;
+        // Scheduler
+        let scheduler_config = ddim::DDIMSchedulerConfig { prediction_type: prediction_type.unwrap_or(PredictionType::Epsilon), ..Default::default() };
+        let scheduler = AiyStableDiffusion::build_scheduler(n_steps, scheduler_config);
+
+        let no_grad_guard = tch::no_grad_guard();
+        let bsize = 1;
+        let start = SystemTime::now();
+        for idx in 0..num_samples {
+            tch::manual_seed(seed + idx);
+            let mut latents = Tensor::randn(
+                [bsize, 4, height / 8, width / 8],
+                (Kind::Float, self.unet_device),
+            );
+
+            // scale the initial noise by the standard deviation required by the scheduler
+            latents *= scheduler.init_noise_sigma();
+
+            for (timestep_index, &timestep) in scheduler.timesteps().iter().enumerate() {
+                println!("Timestep {timestep_index}/{n_steps}");
+                let latent_model_input = Tensor::cat(&[&latents, &latents], 0);
+
+                let latent_model_input = scheduler.scale_model_input(latent_model_input, timestep);
+                let noise_pred = self.unet_model.forward(&latent_model_input, timestep as f64, &text_embeddings);
+                let noise_pred = noise_pred.chunk(2, 0);
+                let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
+                let noise_pred =
+                    noise_pred_uncond + (noise_pred_text - noise_pred_uncond) * GUIDANCE_SCALE; 
+                latents = scheduler.step(&noise_pred, timestep, &latents);
+
+                // 生成中间过程图片
+                if intermediary_images {
+                    let latents = latents.to(self.vae_device);
+                    let image = self.vae_decode(&latents);
+                    let image = (image / 2 + 0.5).clamp(0., 1.).to_device(Device::Cpu);
+                    let image = (image * 255.).to_kind(Kind::Uint8);
+                    let final_image =
+                        output_filename(&final_image, idx + 1, num_samples, Some(timestep_index + 1));
+                    tch::vision::image::save(&image, final_image)?;
+                }
+            }
+
+            println!("Generating the final image for sample {}/{}.", idx + 1, num_samples);
+            let latents = latents.to(self.vae_device);
+            let image = self.vae_decode(&latents);
+            let image = (image / 2 + 0.5).clamp(0., 1.).to_device(Device::Cpu);
+            let image = (image * 255.).to_kind(Kind::Uint8);
+            let final_image = output_filename(&final_image, idx + 1, num_samples, None);
+            tch::vision::image::save(&image, final_image)?;
+        }
+        println!("=== Generated image: {:?}", SystemTime::now().duration_since(start).unwrap());
+        drop(no_grad_guard);
+        Ok(())
     }
 
 }
