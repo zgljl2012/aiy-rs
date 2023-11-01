@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use aiy_rs::{aiy_sd::AiyStableDiffusion, clip_configs::ClipConfig};
+use aiy_rs::{aiy_sd::{AiyStableDiffusion, AiyConfig}, clip_configs::ClipConfig};
 // Stable Diffusion implementation inspired:
 // - Huggingface's amazing diffuser Python api: https://huggingface.co/blog/annotated-diffusion
 // - Huggingface's (also amazing) blog post: https://huggingface.co/blog/annotated-diffusion
@@ -143,16 +143,6 @@ enum StableDiffusionVersion {
 }
 
 impl Args {
-    fn vae_weights(&self) -> String {
-        match &self.vae_weights {
-            Some(w) => w.clone(),
-            None => match self.sd_version {
-                StableDiffusionVersion::V1_5 => "data/vae.safetensors".to_string(),
-                StableDiffusionVersion::V2_1 => "data/vae_v2.1.safetensors".to_string(),
-            },
-        }
-    }
-
     fn unet_weights(&self) -> String {
         match &self.unet_weights {
             Some(w) => w.clone(),
@@ -192,7 +182,6 @@ fn output_filename(
 }
 
 fn run(args: Args) -> anyhow::Result<()> {
-    let vae_weights = args.vae_weights();
     let unet_weights = args.unet_weights();
     let Args {
         prompt,
@@ -226,21 +215,23 @@ fn run(args: Args) -> anyhow::Result<()> {
 
     // 确定哪个模型使用 CPU，默认都不用
     let device_setup = diffusers::utils::DeviceSetup::new(cpu);
-    let vae_device = device_setup.get("vae");
     let unet_device = device_setup.get("unet");
     let scheduler = sd_config.build_scheduler(n_steps);
 
-    let aiy = AiyStableDiffusion::new(vocab_file.clone(), "data/clip_v2.1.safetensors", ClipConfig::V2_1.config()).unwrap();
+    let aiy = AiyStableDiffusion::new(AiyConfig {
+        vocab_path: vocab_file.clone(),
+        clip_weights_path: "data/clip_v2.1.safetensors".to_string(),
+        clip_config: ClipConfig::V2_1.config(),
+        // VAE
+        vae_weights_path: "data/vae_v2.1.safetensors".to_string()
+    }).unwrap();
 
     println!("=== Device setup: {:?}", SystemTime::now().duration_since(start).unwrap());
 
-    println!("Building the Clip transformer.");
     let text_embeddings = aiy.embed_prompts(&prompt, "sand orange human sky, water, sea")?;
 
     let no_grad_guard = tch::no_grad_guard();
 
-    println!("Building the autoencoder.");
-    let vae = sd_config.build_vae(&vae_weights, vae_device)?;
     println!("Building the unet.");
     let unet = sd_config.build_unet(&unet_weights, unet_device, 4)?;
 
@@ -270,8 +261,8 @@ fn run(args: Args) -> anyhow::Result<()> {
 
             // 生成中间过程图片
             if args.intermediary_images {
-                let latents = latents.to(vae_device);
-                let image = vae.decode(&(&latents / 0.18215));
+                let latents = latents.to(aiy.vae_device);
+                let image = aiy.vae_decode(&latents);
                 let image = (image / 2 + 0.5).clamp(0., 1.).to_device(Device::Cpu);
                 let image = (image * 255.).to_kind(Kind::Uint8);
                 let final_image =
@@ -281,8 +272,8 @@ fn run(args: Args) -> anyhow::Result<()> {
         }
 
         println!("Generating the final image for sample {}/{}.", idx + 1, num_samples);
-        let latents = latents.to(vae_device);
-        let image = vae.decode(&(&latents / 0.18215));
+        let latents = latents.to(aiy.vae_device);
+        let image = aiy.vae_decode(&latents);
         let image = (image / 2 + 0.5).clamp(0., 1.).to_device(Device::Cpu);
         let image = (image * 255.).to_kind(Kind::Uint8);
         let final_image = output_filename(&final_image, idx + 1, num_samples, None);
