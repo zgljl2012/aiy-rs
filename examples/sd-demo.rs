@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use aiy_rs::{aiy_sd::{AiyStableDiffusion, AiyConfig}, clip_configs::ClipConfig};
+use aiy_rs::{aiy_sd::{AiyStableDiffusion, AiyConfig}, clip_configs::ClipConfig, unet_config::UNetConfig};
 // Stable Diffusion implementation inspired:
 // - Huggingface's amazing diffuser Python api: https://huggingface.co/blog/annotated-diffusion
 // - Huggingface's (also amazing) blog post: https://huggingface.co/blog/annotated-diffusion
@@ -142,18 +142,6 @@ enum StableDiffusionVersion {
     V2_1,
 }
 
-impl Args {
-    fn unet_weights(&self) -> String {
-        match &self.unet_weights {
-            Some(w) => w.clone(),
-            None => match self.sd_version {
-                StableDiffusionVersion::V1_5 => "data/unet.safetensors".to_string(),
-                StableDiffusionVersion::V2_1 => "data/unet_v2.1.safetensors".to_string(),
-            },
-        }
-    }
-}
-
 fn output_filename(
     basename: &str,
     sample_idx: i64,
@@ -182,15 +170,12 @@ fn output_filename(
 }
 
 fn run(args: Args) -> anyhow::Result<()> {
-    let unet_weights = args.unet_weights();
     let Args {
         prompt,
-        cpu,
         height,
         width,
         n_steps,
         seed,
-        vocab_file,
         final_image,
         sliced_attention_size,
         num_samples,
@@ -214,34 +199,32 @@ fn run(args: Args) -> anyhow::Result<()> {
     let start = SystemTime::now();
 
     // 确定哪个模型使用 CPU，默认都不用
-    let device_setup = diffusers::utils::DeviceSetup::new(cpu);
-    let unet_device = device_setup.get("unet");
     let scheduler = sd_config.build_scheduler(n_steps);
 
     let aiy = AiyStableDiffusion::new(AiyConfig {
-        vocab_path: vocab_file.clone(),
+        vocab_path: "data/bpe_simple_vocab_16e6.txt".to_string(),
+        // CLIP
         clip_weights_path: "data/clip_v2.1.safetensors".to_string(),
         clip_config: ClipConfig::V2_1.config(),
         // VAE
-        vae_weights_path: "data/vae_v2.1.safetensors".to_string()
+        vae_weights_path: "data/vae_v2.1.safetensors".to_string(),
+        // UNET
+        unet_weights_path: "data/unet_v2.1.safetensors".to_string(),
+        unet_config: UNetConfig::V2_1.config(),
     }).unwrap();
 
     println!("=== Device setup: {:?}", SystemTime::now().duration_since(start).unwrap());
-
+    // embed
     let text_embeddings = aiy.embed_prompts(&prompt, "sand orange human sky, water, sea")?;
 
     let no_grad_guard = tch::no_grad_guard();
-
-    println!("Building the unet.");
-    let unet = sd_config.build_unet(&unet_weights, unet_device, 4)?;
-
     let bsize = 1;
     let start = SystemTime::now();
     for idx in 0..num_samples {
         tch::manual_seed(seed + idx);
         let mut latents = Tensor::randn(
             [bsize, 4, sd_config.height / 8, sd_config.width / 8],
-            (Kind::Float, unet_device),
+            (Kind::Float, aiy.unet_device),
         );
 
         // scale the initial noise by the standard deviation required by the scheduler
@@ -252,7 +235,7 @@ fn run(args: Args) -> anyhow::Result<()> {
             let latent_model_input = Tensor::cat(&[&latents, &latents], 0);
 
             let latent_model_input = scheduler.scale_model_input(latent_model_input, timestep);
-            let noise_pred = unet.forward(&latent_model_input, timestep as f64, &text_embeddings);
+            let noise_pred = aiy.unet_model.forward(&latent_model_input, timestep as f64, &text_embeddings);
             let noise_pred = noise_pred.chunk(2, 0);
             let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
             let noise_pred =

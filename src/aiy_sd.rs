@@ -1,6 +1,6 @@
 
 use anyhow::Ok;
-use diffusers::models::vae;
+use diffusers::models::{vae, unet_2d};
 use diffusers::transformers::clip::{Tokenizer, Config};
 use diffusers::transformers::clip;
 use tch::nn::Module;
@@ -17,7 +17,9 @@ pub struct AiyConfig {
     pub vocab_path: String,
     pub clip_weights_path: String,
     pub clip_config: Config,
-    pub vae_weights_path: String
+    pub vae_weights_path: String,
+    pub unet_weights_path: String,
+    pub unet_config: unet_2d::UNet2DConditionModelConfig
 }
 
 pub struct AiyStableDiffusion {
@@ -28,6 +30,7 @@ pub struct AiyStableDiffusion {
     pub vae_device: Device,
     vae_model: vae::AutoEncoderKL,
     // unet
+    pub unet_model: unet_2d::UNet2DConditionModel,
     pub unet_device: Device,
     // 分词器
     bpe: Bpe,
@@ -44,7 +47,10 @@ impl AiyStableDiffusion {
         let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, cfg.clip_config.clone())?;
         // VAE
         let vae_model = AiyStableDiffusion::build_vae(&cfg.vae_weights_path, vae_device)?;
-        Ok(Self { tokenizer, bpe, clip_device, unet_device, clip_model, vae_model, vae_device })
+        // UNET
+        let in_channels = 4;
+        let unet_model = AiyStableDiffusion::build_unet(&cfg.unet_weights_path, unet_device, in_channels, cfg.unet_config)?;
+        Ok(Self { tokenizer, bpe, clip_device, unet_device, clip_model, vae_model, vae_device, unet_model })
     }
 
     pub fn change_clip(&mut self, clip_config: Config) -> anyhow::Result<()> {
@@ -118,5 +124,18 @@ impl AiyStableDiffusion {
     pub fn vae_decode(&self, t: &Tensor) -> Tensor {
         self.vae_model.decode(&(t / 0.18215))
     }
-    
+
+    fn build_unet(
+        unet_weights: &str,
+        device: Device,
+        in_channels: i64,
+        unet_cfg: unet_2d::UNet2DConditionModelConfig,
+    ) -> anyhow::Result<unet_2d::UNet2DConditionModel> {
+        let mut vs_unet = tch::nn::VarStore::new(device);
+        let unet =
+            unet_2d::UNet2DConditionModel::new(vs_unet.root(), in_channels, 4, unet_cfg);
+        vs_unet.load(unet_weights)?;
+        Ok(unet)
+    }
+
 }
