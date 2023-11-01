@@ -9,3 +9,4 @@ tch = "0.14.0"
 diffusers = { git = "https://github.com/zgljl2012/diffusers-rs", rev = "3e9dacdb8370c3bfbbca403b719d25d73c7644bb"}
 regex = "1.10.2"
 clap = { version = "4.4.7", features = ["derive"] }
+torch-sys = "0.14.0"

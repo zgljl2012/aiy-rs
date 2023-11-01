@@ -22,9 +22,9 @@ fn run() -> anyhow::Result<()> {
         clip_weights_path: "data/clip_v2.1.safetensors".to_string(),
         clip_config: ClipConfig::V2_1.config(),
         // VAE
-        vae_weights_path: "data/vae_v2.1.safetensors".to_string(),
+        vae_weights_path: "data/vae_v2.1.f16.safetensors".to_string(),
         // UNET
-        unet_weights_path: "data/unet_v2.1.safetensors".to_string(),
+        unet_weights_path: "data/unet_v2.1.fp16.safetensors".to_string(),
         unet_config: UNetConfig::V2_1.config(),
     })
     .unwrap();
@@ -36,7 +36,7 @@ fn run() -> anyhow::Result<()> {
 
     aiy.run(
         "A very realistic photo of a rusty robot walking on a sandy beach",
-        "sea, tiny eye",
+        "sea, tiny eye, half body",
         "./sd_final.png",
         false,
         30,

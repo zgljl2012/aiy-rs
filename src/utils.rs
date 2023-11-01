@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use tch::Device;
+use tch::{Device, Kind, Tensor};
 
 pub(crate) fn file_open<P: AsRef<Path>>(path: P) -> anyhow::Result<std::fs::File> {
     std::fs::File::open(path.as_ref()).map_err(|e| {
@@ -41,5 +41,10 @@ pub fn output_filename(
             }
         },
     }
+}
+
+pub fn has_nan(xs: &Tensor) -> bool {
+    let num = xs.isnan().to_kind(Kind::Int).sum(Kind::Int).greater(0).to_string(10).unwrap();
+    num.starts_with("1")
 }
 

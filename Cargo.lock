@@ -37,6 +37,7 @@ dependencies = [
  "diffusers",
  "regex",
  "tch",
+ "torch-sys",
 ]
 
 [[package]]

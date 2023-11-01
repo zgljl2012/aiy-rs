@@ -2,7 +2,7 @@
 use std::time::SystemTime;
 
 use anyhow::Ok;
-use diffusers::models::{vae, unet_2d};
+use crate::vae;
 use diffusers::schedulers::PredictionType;
 use diffusers::schedulers::ddim::{self, DDIMSchedulerConfig};
 use diffusers::transformers::clip::{Tokenizer, Config};
@@ -13,6 +13,7 @@ use tch::{Tensor, Device, Kind};
 
 use crate::utils::output_filename;
 use crate::{bpe::Bpe, utils::get_device};
+use crate::unet_2d;
 
 const GUIDANCE_SCALE: f64 = 7.5;
 
@@ -158,12 +159,13 @@ impl AiyStableDiffusion {
         let no_grad_guard = tch::no_grad_guard();
         let bsize = 1;
         let start = SystemTime::now();
+        let kind = Kind::Half; // Kind::Half
         for idx in 0..num_samples {
             tch::manual_seed(seed + idx);
             let mut latents = Tensor::randn(
                 [bsize, 4, height / 8, width / 8],
-                (Kind::Float, self.unet_device),
-            );
+                (kind, self.unet_device),
+            ).set_requires_grad(true);
 
             // scale the initial noise by the standard deviation required by the scheduler
             latents *= scheduler.init_noise_sigma();
@@ -171,15 +173,15 @@ impl AiyStableDiffusion {
             for (timestep_index, &timestep) in scheduler.timesteps().iter().enumerate() {
                 println!("Timestep {timestep_index}/{n_steps}");
                 let latent_model_input = Tensor::cat(&[&latents, &latents], 0);
-
                 let latent_model_input = scheduler.scale_model_input(latent_model_input, timestep);
-                let noise_pred = self.unet_model.forward(&latent_model_input, timestep as f64, &text_embeddings);
+                let tm = text_embeddings.to_kind(kind);
+                let noise_pred = self.unet_model.forward(&latent_model_input, timestep as f64, &tm);
                 let noise_pred = noise_pred.chunk(2, 0);
                 let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
                 let noise_pred =
-                    noise_pred_uncond + (noise_pred_text - noise_pred_uncond) * GUIDANCE_SCALE; 
+                    noise_pred_uncond + (noise_pred_text - noise_pred_uncond) * GUIDANCE_SCALE;
+                
                 latents = scheduler.step(&noise_pred, timestep, &latents);
-
                 // 生成中间过程图片
                 if intermediary_images {
                     let latents = latents.to(self.vae_device);

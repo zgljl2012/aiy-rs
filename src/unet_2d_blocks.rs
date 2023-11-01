@@ -72,7 +72,8 @@ impl Upsample2D {
             }
             Some((h, w)) => xs.upsample_nearest2d([h, w], None, None),
         };
-        xs.apply(&self.conv)
+        let t = xs.apply(&self.conv);
+        t
     }
 }
 
@@ -742,9 +743,10 @@ impl CrossAttnUpBlock2D {
             xs = resnet.forward(&xs, temb);
             xs = self.attentions[index].forward(&xs, encoder_hidden_states);
         }
-        match &self.upblock.upsampler {
+        let xs = match &self.upblock.upsampler {
             Some(upsampler) => upsampler.forward(&xs, upsample_size),
             None => xs,
-        }
+        };
+        xs
     }
 }

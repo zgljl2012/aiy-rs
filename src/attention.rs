@@ -1,5 +1,7 @@
 //! Attention Based Building Blocks
+
 use tch::{nn, nn::Module, IndexOp, Kind, Tensor};
+
 #[derive(Debug)]
 struct GeGlu {
     proj: nn::Linear,
@@ -126,9 +128,13 @@ impl CrossAttention {
     }
 
     fn attention(&self, query: &Tensor, key: &Tensor, value: &Tensor) -> Tensor {
-        let xs = query
-            .matmul(&(key.transpose(-1, -2) * self.scale))
-            .softmax(-1, query.kind())
+        let kind = query.kind();
+        // 此时要做一个类型转化，转化为 Float，否则等下计算 softmax 时，可能会出现 NaN 值；
+        // 若出现了 NaN 值，后续计算中，正则化会导致所有数据都为 NaN
+        let xs = query.to_kind(Kind::Float)
+            .matmul(&(key.to_kind(Kind::Float).transpose(-1, -2) * self.scale))
+            .softmax(-1, Kind::Float)
+            .to_kind(kind)
             .matmul(value);
         self.reshape_batch_dim_to_heads(&xs)
     }
@@ -144,7 +150,9 @@ impl CrossAttention {
         let key = self.reshape_heads_to_batch_dim(&key);
         let value = self.reshape_heads_to_batch_dim(&value);
         let t = match self.slice_size {
-            None => self.attention(&query, &key, &value).apply(&self.to_out),
+            None => {
+                self.attention(&query, &key, &value).apply(&self.to_out)
+            },
             Some(slice_size) => {
                 if query.size()[0] / slice_size <= 1 {
                     self.attention(&query, &key, &value).apply(&self.to_out)
@@ -196,10 +204,11 @@ impl BasicTransformerBlock {
     }
 
     fn forward(&self, xs: &Tensor, context: Option<&Tensor>) -> Tensor {
-        let xs = self.attn1.forward(&xs.apply(&self.norm1), None) + xs;
+        let t = xs.apply(&self.norm1);
+        let xs = self.attn1.forward(&t, None) + xs;
         let xs = self.attn2.forward(&xs.apply(&self.norm2), context) + xs;
-        let t = xs.apply(&self.norm3).apply(&self.ff) + xs;
-        t
+        let xs = xs.apply(&self.norm3).apply(&self.ff) + xs;
+        xs
     }
 }
 
@@ -282,6 +291,7 @@ impl SpatialTransformer {
         let (batch, _channel, height, weight) = xs.size4().unwrap();
         let residual = xs;
         let xs = xs.apply(&self.norm);
+        let xs = xs.set_requires_grad(true);
         let (inner_dim, xs) = match &self.proj_in {
             Proj::Conv2D(p) => {
                 let xs = xs.apply(p);
@@ -295,9 +305,9 @@ impl SpatialTransformer {
                 (inner_dim, xs.apply(p))
             }
         };
-        let mut xs = xs;
+        let mut xs = xs.set_requires_grad(true);
         for block in self.transformer_blocks.iter() {
-            xs = block.forward(&xs, context)
+            xs = block.forward(&xs, context).set_requires_grad(true);
         }
         let xs = match &self.proj_out {
             Proj::Conv2D(p) => {
@@ -374,7 +384,7 @@ impl Module for AttentionBlock {
         let scale = f64::powf((self.channels as f64) / (self.num_heads as f64), -0.25);
         let attention_scores =
             (query_states * scale).matmul(&(key_states.transpose(-1, -2) * scale));
-        let attention_probs = attention_scores.softmax(-1, Kind::Float);
+        let attention_probs = attention_scores.softmax(-1, xs.kind());
 
         let xs = attention_probs.matmul(&value_states);
         let xs = xs.permute([0, 2, 1, 3]).contiguous();
