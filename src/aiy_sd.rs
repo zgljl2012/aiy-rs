@@ -165,7 +165,7 @@ impl AiyStableDiffusion {
             let mut latents = Tensor::randn(
                 [bsize, 4, height / 8, width / 8],
                 (kind, self.unet_device),
-            ).set_requires_grad(true);
+            );
 
             // scale the initial noise by the standard deviation required by the scheduler
             latents *= scheduler.init_noise_sigma();

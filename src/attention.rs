@@ -129,6 +129,14 @@ impl CrossAttention {
 
     fn attention(&self, query: &Tensor, key: &Tensor, value: &Tensor) -> Tensor {
         let kind = query.kind();
+        if kind == Kind::Float {
+            // Float 不需要转化
+            let xs = query
+                .matmul(&(key.transpose(-1, -2) * self.scale))
+                .softmax(-1, Kind::Float)
+                .matmul(value);
+            return self.reshape_batch_dim_to_heads(&xs)
+        }
         // 此时要做一个类型转化，转化为 Float，否则等下计算 softmax 时，可能会出现 NaN 值；
         // 若出现了 NaN 值，后续计算中，正则化会导致所有数据都为 NaN
         let xs = query.to_kind(Kind::Float)
@@ -291,7 +299,6 @@ impl SpatialTransformer {
         let (batch, _channel, height, weight) = xs.size4().unwrap();
         let residual = xs;
         let xs = xs.apply(&self.norm);
-        let xs = xs.set_requires_grad(true);
         let (inner_dim, xs) = match &self.proj_in {
             Proj::Conv2D(p) => {
                 let xs = xs.apply(p);
@@ -305,9 +312,9 @@ impl SpatialTransformer {
                 (inner_dim, xs.apply(p))
             }
         };
-        let mut xs = xs.set_requires_grad(true);
+        let mut xs = xs;
         for block in self.transformer_blocks.iter() {
-            xs = block.forward(&xs, context).set_requires_grad(true);
+            xs = block.forward(&xs, context);
         }
         let xs = match &self.proj_out {
             Proj::Conv2D(p) => {

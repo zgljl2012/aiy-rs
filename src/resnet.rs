@@ -79,7 +79,6 @@ impl ResnetBlock2D {
             Some(conv_shortcut) => xs.apply(conv_shortcut),
             None => xs.shallow_clone(),
         };
-        let xs = xs.set_requires_grad(true);
         let xs = xs.apply(&self.norm1);
         let xs = xs.silu().apply(&self.conv1);
         let xs = match (temb, &self.time_emb_proj) {
