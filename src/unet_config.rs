@@ -1,4 +1,4 @@
-use diffusers::models::unet_2d;
+use crate::unet_2d;
 
 
 pub enum UNetConfig {
