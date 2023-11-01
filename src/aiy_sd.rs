@@ -31,7 +31,10 @@ pub struct AiyConfig {
     pub unet_weights_path: String,
     pub unet_fp16: Option<bool>,
     pub unet_config: unet_2d::UNet2DConditionModelConfig,
-    pub base_model: ModelKind
+    pub base_model: ModelKind,
+    pub width: usize,
+    pub height: usize,
+    pub prediction_type: Option<PredictionType>
 }
 
 pub struct AiyStableDiffusion {
@@ -50,7 +53,11 @@ pub struct AiyStableDiffusion {
     bpe: Bpe,
     tokenizer: Tokenizer,
     // 基础模型
-    pub base_model: ModelKind
+    pub base_model: ModelKind,
+    // 默认宽高
+    pub default_width: usize,
+    pub default_height: usize,
+    pub default_prediction_type: Option<PredictionType>
 }
 
 impl AiyStableDiffusion {
@@ -68,7 +75,7 @@ impl AiyStableDiffusion {
         let unet_model = AiyStableDiffusion::build_unet(&cfg.unet_weights_path, unet_device, in_channels, cfg.unet_config)?;
         let unet_fp16 = cfg.unet_fp16.unwrap_or(false);
         let vae_fp16 = cfg.vae_fp16.unwrap_or(false);
-        Ok(Self { tokenizer, bpe, clip_device, unet_device, clip_model, vae_model, vae_device, unet_model, unet_fp16, vae_fp16, base_model: cfg.base_model })
+        Ok(Self { tokenizer, bpe, clip_device, unet_device, clip_model, vae_model, vae_device, unet_model, unet_fp16, vae_fp16, base_model: cfg.base_model, default_height: cfg.height, default_width: cfg.width, default_prediction_type: cfg.prediction_type })
     }
 
     pub fn change_clip(&mut self, clip_config: Config) -> anyhow::Result<()> {
@@ -160,10 +167,10 @@ impl AiyStableDiffusion {
         ddim::DDIMScheduler::new(n_steps, config)
     }
 
-    pub fn run(&self, prompt: &str, negative_prompt: &str, final_image: &str, intermediary_images: bool, n_steps: usize, num_samples: i64, seed: i64, width: i64, height: i64, prediction_type: Option<PredictionType>) -> anyhow::Result<()> {
+    pub fn text_2_image(&self, prompt: &str, negative_prompt: &str, final_image: &str, intermediary_images: bool, n_steps: usize, num_samples: i64, seed: i64, width: Option<usize>, height: Option<usize>) -> anyhow::Result<()> {
         let text_embeddings = self.embed_prompts(prompt, negative_prompt)?;
         // Scheduler
-        let scheduler_config = ddim::DDIMSchedulerConfig { prediction_type: prediction_type.unwrap_or(PredictionType::Epsilon), ..Default::default() };
+        let scheduler_config = ddim::DDIMSchedulerConfig { prediction_type: self.default_prediction_type.unwrap_or(PredictionType::Epsilon), ..Default::default() };
         let scheduler = AiyStableDiffusion::build_scheduler(n_steps, scheduler_config);
 
         let no_grad_guard = tch::no_grad_guard();
@@ -173,7 +180,7 @@ impl AiyStableDiffusion {
         for idx in 0..num_samples {
             tch::manual_seed(seed + idx);
             let mut latents = Tensor::randn(
-                [bsize, 4, height / 8, width / 8],
+                [bsize, 4, (height.unwrap_or(self.default_height) as i64) / 8, (width.unwrap_or(self.default_width) as i64) / 8],
                 (kind, self.unet_device),
             );
 
