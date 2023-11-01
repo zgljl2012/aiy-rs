@@ -23,8 +23,10 @@ fn run() -> anyhow::Result<()> {
         clip_config: ClipConfig::V2_1.config(),
         // VAE
         vae_weights_path: "data/vae_v2.1.f16.safetensors".to_string(),
+        vae_fp16: Some(true),
         // UNET
-        unet_weights_path: "data/unet_v2.1.fp16.safetensors".to_string(),
+        unet_weights_path: "data/unet_v2.1.safetensors".to_string(),
+        unet_fp16: Some(false),
         unet_config: UNetConfig::V2_1.config(),
     })
     .unwrap();

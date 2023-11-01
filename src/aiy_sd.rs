@@ -26,7 +26,9 @@ pub struct AiyConfig {
     pub clip_weights_path: String,
     pub clip_config: Config,
     pub vae_weights_path: String,
+    pub vae_fp16: Option<bool>,
     pub unet_weights_path: String,
+    pub unet_fp16: Option<bool>,
     pub unet_config: unet_2d::UNet2DConditionModelConfig,
 }
 
@@ -37,9 +39,11 @@ pub struct AiyStableDiffusion {
     // vae
     pub vae_device: Device,
     vae_model: vae::AutoEncoderKL,
+    vae_fp16: bool,
     // unet
     pub unet_model: unet_2d::UNet2DConditionModel,
     pub unet_device: Device,
+    unet_fp16: bool,
     // 分词器
     bpe: Bpe,
     tokenizer: Tokenizer
@@ -58,7 +62,9 @@ impl AiyStableDiffusion {
         // UNET
         let in_channels = 4;
         let unet_model = AiyStableDiffusion::build_unet(&cfg.unet_weights_path, unet_device, in_channels, cfg.unet_config)?;
-        Ok(Self { tokenizer, bpe, clip_device, unet_device, clip_model, vae_model, vae_device, unet_model })
+        let unet_fp16 = cfg.unet_fp16.unwrap_or(false);
+        let vae_fp16 = cfg.vae_fp16.unwrap_or(false);
+        Ok(Self { tokenizer, bpe, clip_device, unet_device, clip_model, vae_model, vae_device, unet_model, unet_fp16, vae_fp16 })
     }
 
     pub fn change_clip(&mut self, clip_config: Config) -> anyhow::Result<()> {
@@ -159,7 +165,7 @@ impl AiyStableDiffusion {
         let no_grad_guard = tch::no_grad_guard();
         let bsize = 1;
         let start = SystemTime::now();
-        let kind = Kind::Half; // Kind::Half
+        let kind = if self.unet_fp16 { Kind::Half } else { Kind::Float }; // Kind::Half
         for idx in 0..num_samples {
             tch::manual_seed(seed + idx);
             let mut latents = Tensor::randn(
@@ -195,7 +201,13 @@ impl AiyStableDiffusion {
             }
 
             println!("Generating the final image for sample {}/{}.", idx + 1, num_samples);
-            let latents = latents.to(self.vae_device);
+            let mut latents = latents.to(self.vae_device);
+            // 如果 unet 是 fp16 且 vae 不是 fp16
+            if self.unet_fp16 && !self.vae_fp16 {
+                latents = latents.to_kind(Kind::Float)
+            } else if self.vae_fp16 && !self.unet_fp16 {
+                latents = latents.to_kind(Kind::Half)
+            }
             let image = self.vae_decode(&latents);
             let image = (image / 2 + 0.5).clamp(0., 1.).to_device(Device::Cpu);
             let image = (image * 255.).to_kind(Kind::Uint8);
