@@ -13,7 +13,6 @@ const PAT: &str =
 
 pub struct AiyStableDiffusion {
     // clip
-    clip_config: Config,
     clip_device: Device,
     clip_model: clip::ClipTextTransformer,
     // unet
@@ -30,7 +29,7 @@ impl AiyStableDiffusion {
         let bpe = Bpe::new(bpe_path)?;
         let clip_model = AiyStableDiffusion::build_clip_transformer(&clip_config, clip_weights, clip_device)?;
         let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, clip_config.clone())?;
-        Ok(Self { tokenizer, bpe, clip_device, clip_config, unet_device, clip_model })
+        Ok(Self { tokenizer, bpe, clip_device, unet_device, clip_model })
     }
 
     pub fn change_clip(&mut self, clip_config: Config) -> anyhow::Result<()> {

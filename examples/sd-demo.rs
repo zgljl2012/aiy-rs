@@ -61,7 +61,7 @@ use aiy_rs::{aiy_sd::AiyStableDiffusion, clip_configs::ClipConfig};
 //   save_file(dict(model), './unet.safetensors')
 use clap::Parser;
 use diffusers::pipelines::stable_diffusion;
-use tch::{nn::Module, Device, Kind, Tensor};
+use tch::{Device, Kind, Tensor};
 
 const GUIDANCE_SCALE: f64 = 7.5;
 
@@ -143,16 +143,6 @@ enum StableDiffusionVersion {
 }
 
 impl Args {
-    fn clip_weights(&self) -> String {
-        match &self.clip_weights {
-            Some(w) => w.clone(),
-            None => match self.sd_version {
-                StableDiffusionVersion::V1_5 => "data/pytorch_model.safetensors".to_string(),
-                StableDiffusionVersion::V2_1 => "data/clip_v2.1.safetensors".to_string(),
-            },
-        }
-    }
-
     fn vae_weights(&self) -> String {
         match &self.vae_weights {
             Some(w) => w.clone(),
@@ -202,7 +192,6 @@ fn output_filename(
 }
 
 fn run(args: Args) -> anyhow::Result<()> {
-    let clip_weights = args.clip_weights();
     let vae_weights = args.vae_weights();
     let unet_weights = args.unet_weights();
     let Args {
