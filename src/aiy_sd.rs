@@ -5,8 +5,8 @@ use anyhow::Ok;
 use crate::vae;
 use diffusers::schedulers::PredictionType;
 use diffusers::schedulers::ddim::{self, DDIMSchedulerConfig};
-use diffusers::transformers::clip::{Tokenizer, Config};
-use diffusers::transformers::clip;
+use crate::clip::{Tokenizer, Config};
+use crate::clip;
 use tch::nn::Module;
 use regex;
 use tch::{Tensor, Device, Kind};
@@ -127,7 +127,6 @@ impl AiyStableDiffusion {
         let tokens = self.encode_prompt(&prompt)?;
         // 负面提示词
         let uncond_tokens = self.encode_prompt(negative_prompt)?;
-
         println!("Building the Clip transformer.");
         let text_embeddings = self.clip_model.forward(&tokens);
         let uncond_embeddings = self.clip_model.forward(&uncond_tokens);

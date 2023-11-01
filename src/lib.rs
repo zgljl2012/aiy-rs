@@ -12,3 +12,4 @@ pub mod unet_2d_blocks;
 pub mod resnet;
 pub mod attention;
 pub mod vae;
+pub mod clip;

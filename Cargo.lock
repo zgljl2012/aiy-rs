@@ -35,6 +35,7 @@ dependencies = [
  "anyhow",
  "clap",
  "diffusers",
+ "half",
  "regex",
  "tch",
  "torch-sys",

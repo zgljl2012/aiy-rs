@@ -1,4 +1,4 @@
-use diffusers::transformers::clip::Config;
+use crate::clip::Config;
 
 
 pub enum ClipConfig {

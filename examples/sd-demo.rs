@@ -19,14 +19,14 @@ fn run() -> anyhow::Result<()> {
     let aiy = AiyStableDiffusion::new(AiyConfig {
         vocab_path: "data/bpe_simple_vocab_16e6.txt".to_string(),
         // CLIP
-        clip_weights_path: "data/clip_v2.1.safetensors".to_string(),
+        clip_weights_path: "data/clip_v2.1.f16.safetensors".to_string(),
         clip_config: ClipConfig::V2_1.config(),
         // VAE
         vae_weights_path: "data/vae_v2.1.f16.safetensors".to_string(),
         vae_fp16: Some(true),
         // UNET
-        unet_weights_path: "data/unet_v2.1.safetensors".to_string(),
-        unet_fp16: Some(false),
+        unet_weights_path: "data/unet_v2.1.fp16.safetensors".to_string(),
+        unet_fp16: Some(true),
         unet_config: UNetConfig::V2_1.config(),
     })
     .unwrap();
