@@ -3,6 +3,7 @@
 use crate::attention::{
     AttentionBlock, AttentionBlockConfig, SpatialTransformer, SpatialTransformerConfig,
 };
+use crate::model_kind::ModelKind;
 use crate::resnet::{ResnetBlock2D, ResnetBlock2DConfig};
 use tch::{nn, nn::Module, Tensor};
 
@@ -270,6 +271,7 @@ impl UNetMidBlock2D {
         in_channels: i64,
         temb_channels: Option<i64>,
         config: UNetMidBlock2DConfig,
+        base_model: ModelKind
     ) -> Self {
         let vs_resnets = &vs / "resnets";
         let vs_attns = &vs / "attentions";
@@ -290,7 +292,7 @@ impl UNetMidBlock2D {
         };
         let mut attn_resnets = vec![];
         for index in 0..config.num_layers {
-            let attn = AttentionBlock::new(&vs_attns / index, in_channels, attn_cfg);
+            let attn = AttentionBlock::new(&vs_attns / index, in_channels, attn_cfg, base_model.clone());
             let resnet = ResnetBlock2D::new(&vs_resnets / (index + 1), in_channels, resnet_cfg);
             attn_resnets.push((attn, resnet))
         }

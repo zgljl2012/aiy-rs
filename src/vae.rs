@@ -3,10 +3,10 @@
 //! Auto-encoder models compress their input to a usually smaller latent space
 //! before expanding it back to its original shape. This results in the latent values
 //! compressing the original information.
-use crate::unet_2d_blocks::{
+use crate::{unet_2d_blocks::{
     DownEncoderBlock2D, DownEncoderBlock2DConfig, UNetMidBlock2D, UNetMidBlock2DConfig,
     UpDecoderBlock2D, UpDecoderBlock2DConfig,
-};
+}, model_kind::ModelKind};
 use tch::{nn, nn::Module, Tensor};
 
 #[derive(Debug, Clone)]
@@ -41,7 +41,7 @@ struct Encoder {
 }
 
 impl Encoder {
-    fn new(vs: nn::Path, in_channels: i64, out_channels: i64, config: EncoderConfig) -> Self {
+    fn new(vs: nn::Path, in_channels: i64, out_channels: i64, config: EncoderConfig, base_model: ModelKind) -> Self {
         let conv_cfg = nn::ConvConfig { stride: 1, padding: 1, ..Default::default() };
         let conv_in =
             nn::conv2d(&vs / "conv_in", in_channels, config.block_out_channels[0], 3, conv_cfg);
@@ -76,7 +76,7 @@ impl Encoder {
             ..Default::default()
         };
         let mid_block =
-            UNetMidBlock2D::new(&vs / "mid_block", last_block_out_channels, None, mid_cfg);
+            UNetMidBlock2D::new(&vs / "mid_block", last_block_out_channels, None, mid_cfg, base_model);
         let group_cfg = nn::GroupNormConfig { eps: 1e-6, ..Default::default() };
         let conv_norm_out = nn::group_norm(
             &vs / "conv_norm_out",
@@ -128,7 +128,7 @@ struct Decoder {
 }
 
 impl Decoder {
-    fn new(vs: nn::Path, in_channels: i64, out_channels: i64, config: DecoderConfig) -> Self {
+    fn new(vs: nn::Path, in_channels: i64, out_channels: i64, config: DecoderConfig, base_model: ModelKind) -> Self {
         let n_block_out_channels = config.block_out_channels.len();
         let last_block_out_channels = *config.block_out_channels.last().unwrap();
         let conv_cfg = nn::ConvConfig { stride: 1, padding: 1, ..Default::default() };
@@ -142,7 +142,7 @@ impl Decoder {
             ..Default::default()
         };
         let mid_block =
-            UNetMidBlock2D::new(&vs / "mid_block", last_block_out_channels, None, mid_cfg);
+            UNetMidBlock2D::new(&vs / "mid_block", last_block_out_channels, None, mid_cfg, base_model);
         let mut up_blocks = vec![];
         let vs_up_blocks = &vs / "up_blocks";
         let reversed_block_out_channels: Vec<_> =
@@ -250,6 +250,7 @@ impl AutoEncoderKL {
         in_channels: i64,
         out_channels: i64,
         config: AutoEncoderKLConfig,
+        base_model: ModelKind
     ) -> Self {
         let latent_channels = config.latent_channels;
         let encoder_cfg = EncoderConfig {
@@ -258,13 +259,13 @@ impl AutoEncoderKL {
             norm_num_groups: config.norm_num_groups,
             double_z: true,
         };
-        let encoder = Encoder::new(&vs / "encoder", in_channels, latent_channels, encoder_cfg);
+        let encoder = Encoder::new(&vs / "encoder", in_channels, latent_channels, encoder_cfg, base_model.clone());
         let decoder_cfg = DecoderConfig {
             block_out_channels: config.block_out_channels.clone(),
             layers_per_block: config.layers_per_block,
             norm_num_groups: config.norm_num_groups,
         };
-        let decoder = Decoder::new(&vs / "decoder", latent_channels, out_channels, decoder_cfg);
+        let decoder = Decoder::new(&vs / "decoder", latent_channels, out_channels, decoder_cfg, base_model);
         let conv_cfg = Default::default();
         let quant_conv =
             nn::conv2d(&vs / "quant_conv", 2 * latent_channels, 2 * latent_channels, 1, conv_cfg);

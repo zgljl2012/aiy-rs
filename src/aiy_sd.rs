@@ -2,6 +2,7 @@
 use std::time::SystemTime;
 
 use anyhow::Ok;
+use crate::model_kind::ModelKind;
 use crate::vae;
 use diffusers::schedulers::PredictionType;
 use diffusers::schedulers::ddim::{self, DDIMSchedulerConfig};
@@ -30,6 +31,7 @@ pub struct AiyConfig {
     pub unet_weights_path: String,
     pub unet_fp16: Option<bool>,
     pub unet_config: unet_2d::UNet2DConditionModelConfig,
+    pub base_model: ModelKind
 }
 
 pub struct AiyStableDiffusion {
@@ -46,7 +48,9 @@ pub struct AiyStableDiffusion {
     unet_fp16: bool,
     // 分词器
     bpe: Bpe,
-    tokenizer: Tokenizer
+    tokenizer: Tokenizer,
+    // 基础模型
+    pub base_model: ModelKind
 }
 
 impl AiyStableDiffusion {
@@ -58,13 +62,13 @@ impl AiyStableDiffusion {
         let clip_model = AiyStableDiffusion::build_clip_transformer(&cfg.clip_config, &cfg.clip_weights_path, clip_device)?;
         let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, cfg.clip_config.clone())?;
         // VAE
-        let vae_model = AiyStableDiffusion::build_vae(&cfg.vae_weights_path, vae_device)?;
+        let vae_model = AiyStableDiffusion::build_vae(&cfg.vae_weights_path, vae_device, cfg.base_model.clone())?;
         // UNET
         let in_channels = 4;
         let unet_model = AiyStableDiffusion::build_unet(&cfg.unet_weights_path, unet_device, in_channels, cfg.unet_config)?;
         let unet_fp16 = cfg.unet_fp16.unwrap_or(false);
         let vae_fp16 = cfg.vae_fp16.unwrap_or(false);
-        Ok(Self { tokenizer, bpe, clip_device, unet_device, clip_model, vae_model, vae_device, unet_model, unet_fp16, vae_fp16 })
+        Ok(Self { tokenizer, bpe, clip_device, unet_device, clip_model, vae_model, vae_device, unet_model, unet_fp16, vae_fp16, base_model: cfg.base_model })
     }
 
     pub fn change_clip(&mut self, clip_config: Config) -> anyhow::Result<()> {
@@ -107,6 +111,7 @@ impl AiyStableDiffusion {
     fn build_vae(
         vae_weights: &str,
         device: Device,
+        base_model: ModelKind
     ) -> anyhow::Result<vae::AutoEncoderKL> {
         let mut vs_ae = tch::nn::VarStore::new(device);
         let autoencoder = vae::AutoEncoderKLConfig {
@@ -116,7 +121,7 @@ impl AiyStableDiffusion {
             norm_num_groups: 32,
         };
         // https://huggingface.co/runwayml/stable-diffusion-v1-5/blob/main/vae/config.json
-        let autoencoder = vae::AutoEncoderKL::new(vs_ae.root(), 3, 3, autoencoder.clone());
+        let autoencoder = vae::AutoEncoderKL::new(vs_ae.root(), 3, 3, autoencoder.clone(), base_model);
         vs_ae.load(vae_weights)?;
         Ok(autoencoder)
     }

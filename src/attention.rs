@@ -2,6 +2,8 @@
 
 use tch::{nn, nn::Module, IndexOp, Kind, Tensor};
 
+use crate::model_kind::ModelKind;
+
 #[derive(Debug)]
 struct GeGlu {
     proj: nn::Linear,
@@ -356,15 +358,16 @@ pub struct AttentionBlock {
 }
 
 impl AttentionBlock {
-    pub fn new(vs: nn::Path, channels: i64, config: AttentionBlockConfig) -> Self {
+    pub fn new(vs: nn::Path, channels: i64, config: AttentionBlockConfig, base_model: ModelKind) -> Self {
         let num_head_channels = config.num_head_channels.unwrap_or(channels);
         let num_heads = channels / num_head_channels;
         let group_cfg = nn::GroupNormConfig { eps: config.eps, affine: true, ..Default::default() };
-        let group_norm = nn::group_norm(&vs / "group_norm", config.num_groups, channels, group_cfg);
-        let query = nn::linear(&vs / "query", channels, channels, Default::default());
-        let key = nn::linear(&vs / "key", channels, channels, Default::default());
-        let value = nn::linear(&vs / "value", channels, channels, Default::default());
-        let proj_attn = nn::linear(&vs / "proj_attn", channels, channels, Default::default());
+        let paths = base_model.vae_attension_paths(vs);
+        let group_norm = nn::group_norm(paths.group_norm, config.num_groups, channels, group_cfg);
+        let query = nn::linear(paths.query, channels, channels, Default::default());
+        let key = nn::linear(paths.key, channels, channels, Default::default());
+        let value = nn::linear(paths.value, channels, channels, Default::default());
+        let proj_attn = nn::linear(paths.proj_attn, channels, channels, Default::default());
         Self { group_norm, query, key, value, proj_attn, channels, num_heads, config }
     }
 
