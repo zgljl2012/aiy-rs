@@ -14,3 +14,4 @@ pub mod attention;
 pub mod vae;
 pub mod clip;
 pub mod model_kind;
+pub mod example_models;
