@@ -55,6 +55,30 @@ fn bra_v6() -> AiyConfig {
     }
 }
 
+/// https://huggingface.co/stablediffusionapi/beautiful-realistic-asian
+#[allow(dead_code)]
+fn bra_v7() -> AiyConfig {
+    AiyConfig {
+        vocab_path: "data/bpe_simple_vocab_16e6.txt".to_string(),
+        // CLIP
+        clip_weights_path: "data/brav7-clip.safetensors".to_string(),
+        clip_config: ClipConfig::V1_5.config(),
+        // VAE
+        vae_weights_path: "data/brav7-vae.safetensors".to_string(),
+        vae_fp16: Some(true),
+        // UNET
+        unet_weights_path: "data/brav7-unet.safetensors".to_string(),
+        unet_fp16: Some(true),
+        unet_config: UNetConfig::V1_5.config(),
+        // 指定基础模型
+        base_model: ModelKind::SD1_5, // VAE 取值 Path
+        // width & height
+        width: 512,
+        height: 512,
+        prediction_type: None
+    }
+}
+
 #[allow(dead_code)]
 fn sdv2_1() -> AiyConfig {
     AiyConfig {
@@ -87,7 +111,7 @@ fn run() -> anyhow::Result<()> {
 
     let start = SystemTime::now();
 
-    let aiy = AiyStableDiffusion::new(bra_v6())
+    let aiy = AiyStableDiffusion::new(bra_v7())
     .unwrap();
 
     println!(
@@ -96,8 +120,9 @@ fn run() -> anyhow::Result<()> {
     );
 
     aiy.text_2_image(
-        "A very realistic photo of a rusty robot walking on a sandy beach",
-        "sea, tiny eye, half body",
+        // "A very realistic photo of a rusty robot walking on a sandy beach",
+        "ultra realistic close up portrait ((beautiful pale cyberpunk female with heavy black eyeliner)), blue eyes, shaved side haircut, hyper detail, cinematic lighting, magic neon, dark red city, Canon EOS R3, her is touch her hair, nikon, f/1.4, ISO 200, 1/160s, 8K, RAW, unedited, symmetrical balance, in-frame, 8K",
+        "painting, extra fingers, poorly drawn hands, poorly drawn face, deformed, ugly, blurry, bad anatomy, bad proportions, extra limbs, cloned face, skinny, glitchy, double torso, extra arms, extra hands, mangled fingers, missing lips, ugly face, distorted face, extra legs, anime",
         "./sd_final.png",
         false,
         30,
