@@ -31,6 +31,30 @@ fn sdv1_5() -> AiyConfig {
     }
 }
 
+/// https://huggingface.co/jzli/BRA-v6
+#[allow(dead_code)]
+fn bra_v6() -> AiyConfig {
+    AiyConfig {
+        vocab_path: "data/bpe_simple_vocab_16e6.txt".to_string(),
+        // CLIP
+        clip_weights_path: "data/brav6-clip.safetensors".to_string(),
+        clip_config: ClipConfig::V1_5.config(),
+        // VAE
+        vae_weights_path: "data/brav6-vae.safetensors".to_string(),
+        vae_fp16: Some(false),
+        // UNET
+        unet_weights_path: "data/brav6-unet.safetensors".to_string(),
+        unet_fp16: Some(false),
+        unet_config: UNetConfig::V1_5.config(),
+        // 指定基础模型
+        base_model: ModelKind::SD2_1, // VAE 取值 Path
+        // width & height
+        width: 512,
+        height: 512,
+        prediction_type: None
+    }
+}
+
 #[allow(dead_code)]
 fn sdv2_1() -> AiyConfig {
     AiyConfig {
@@ -63,7 +87,7 @@ fn run() -> anyhow::Result<()> {
 
     let start = SystemTime::now();
 
-    let aiy = AiyStableDiffusion::new(sdv2_1())
+    let aiy = AiyStableDiffusion::new(bra_v6())
     .unwrap();
 
     println!(
