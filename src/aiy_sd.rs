@@ -25,7 +25,6 @@ const PAT: &str =
 pub struct AiyConfig {
     pub vocab_path: String,
     pub clip_weights_path: String,
-    pub clip_config: Config,
     pub vae_weights_path: String,
     pub vae_fp16: Option<bool>,
     pub unet_weights_path: String,
@@ -66,8 +65,9 @@ impl AiyStableDiffusion {
         let unet_device = get_device();
         let vae_device = get_device();
         let bpe = Bpe::new(cfg.vocab_path)?;
-        let clip_model = AiyStableDiffusion::build_clip_transformer(&cfg.clip_config, &cfg.clip_weights_path, clip_device)?;
-        let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, cfg.clip_config.clone())?;
+        let clip_config = cfg.base_model.clip_config();
+        let clip_model = AiyStableDiffusion::build_clip_transformer(&clip_config, &cfg.clip_weights_path, clip_device)?;
+        let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, clip_config.clone())?;
         // VAE
         let vae_model = AiyStableDiffusion::build_vae(&cfg.vae_weights_path, vae_device, cfg.base_model.clone())?;
         // UNET

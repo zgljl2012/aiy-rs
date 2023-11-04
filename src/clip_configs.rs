@@ -3,7 +3,7 @@ use crate::clip::Config;
 
 pub enum ClipConfig {
     V1_5,
-    V2_1
+    V2_1,
 }
 
 impl ClipConfig {
