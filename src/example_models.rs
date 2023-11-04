@@ -2,7 +2,7 @@
 use crate::{
     aiy_sd::AiyConfig,
     clip_configs::ClipConfig,
-    unet_config::UNetConfig, model_kind::ModelKind,
+    unet::unet_config::UNetConfig, model_kind::ModelKind,
 };
 
 use diffusers::schedulers::PredictionType;

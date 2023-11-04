@@ -1,6 +1,8 @@
 use std::{collections::HashMap, io::BufRead};
 
-use crate::{bytes_to_unicode::BYTES_TO_UNICODE, utils};
+use crate::utils;
+
+use super::bytes_to_unicode::BYTES_TO_UNICODE;
 use anyhow::Ok;
 
 pub struct Bpe {

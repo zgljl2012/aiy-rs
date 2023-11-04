@@ -6,15 +6,15 @@ use crate::model_kind::ModelKind;
 use crate::vae;
 use diffusers::schedulers::PredictionType;
 use diffusers::schedulers::ddim::{self, DDIMSchedulerConfig};
-use crate::clip::{Tokenizer, Config};
+use crate::clip::{Tokenizer, Config, bpe::Bpe};
 use crate::clip;
 use tch::nn::Module;
 use regex;
 use tch::{Tensor, Device, Kind};
 
 use crate::utils::output_filename;
-use crate::{bpe::Bpe, utils::get_device};
-use crate::unet_2d;
+use crate::utils::get_device;
+use crate::unet::unet_2d;
 
 const GUIDANCE_SCALE: f64 = 7.5;
 

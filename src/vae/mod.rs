@@ -3,10 +3,9 @@
 //! Auto-encoder models compress their input to a usually smaller latent space
 //! before expanding it back to its original shape. This results in the latent values
 //! compressing the original information.
-use crate::{unet_2d_blocks::{
+use crate::{unet::unet_2d_blocks::{
     DownEncoderBlock2D, DownEncoderBlock2DConfig, UNetMidBlock2D, UNetMidBlock2DConfig,
-    UpDecoderBlock2D, UpDecoderBlock2DConfig,
-}, model_kind::ModelKind};
+    UpDecoderBlock2D, UpDecoderBlock2DConfig}, model_kind::ModelKind};
 use tch::{nn, nn::Module, Tensor};
 
 #[derive(Debug, Clone)]

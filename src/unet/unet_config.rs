@@ -1,5 +1,4 @@
-use crate::unet_2d;
-
+use super::unet_2d;
 
 pub enum UNetConfig {
     V1_5,

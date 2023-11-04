@@ -9,6 +9,9 @@ use std::io::BufRead;
 use tch::{nn, nn::Module, Device, Kind, Tensor};
 use half::{self, f16};
 
+mod bytes_to_unicode;
+pub mod bpe;
+
 #[derive(Debug, Clone, Copy)]
 pub enum Activation {
     QuickGelu,
