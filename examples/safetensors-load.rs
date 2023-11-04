@@ -24,15 +24,17 @@ sd_xl_base_1.0.safetensors:
 fn main() {
     // let path = "data/clip_v2.1.safetensors";
     // let path = "data/vae_v2.1.fp16.safetensors";
+    let path = "data/sdxl-base-0.9-unet.safetensors";
+    // let path = "data/unet_v2.1.fp16.safetensors";
     // let path = "data/unet_v2.1.safetensors"; // {"mid_block", "down_blocks", "conv_in", "conv_out", "conv_norm_out", "time_embedding", "up_blocks"}
     // let path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\sd_xl_base_1.0.safetensors";
-    let path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\v2-1_768-nonema-pruned.safetensors";
+    // let path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\v2-1_768-nonema-pruned.safetensors";
     // LEVEL1: {"model", "cond_stage_model", "first_stage_model"}
     // let path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\v2-1_768-nonema-pruned.safetensors";
     let mut first_level = HashSet::new();
     let t = Tensor::read_safetensors(path).unwrap();
     for (name, _value) in &t {
-        if name.starts_with("") {
+        if name.starts_with("up_blocks") {
             println!("{}", name);
             let fields: Vec<String> = name.clone().split(".").into_iter().map(|v| v.to_owned()).collect();
             if fields.len() > 2 {

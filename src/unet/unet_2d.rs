@@ -98,6 +98,7 @@ impl UNet2DConditionModel {
         let time_embedding =
             TimestepEmbedding::new(&vs / "time_embedding", b_channels, time_embed_dim);
         let vs_db = &vs / "down_blocks";
+        // 读取 down_blocks
         let down_blocks = (0..n_blocks)
             .map(|i| {
                 let BlockConfig { out_channels, use_cross_attn, attention_head_dim } =
@@ -165,10 +166,11 @@ impl UNet2DConditionModel {
         );
 
         let vs_ub = &vs / "up_blocks";
+        // 读取 up_blocks 
         let up_blocks = (0..n_blocks)
             .map(|i| {
                 let BlockConfig { out_channels, use_cross_attn, attention_head_dim } =
-                    config.blocks[n_blocks - 1 - i];
+                    config.blocks[n_blocks - 1 - i]; // blocks 倒过来就是 up_blocks，正着数就是 down_blocks
 
                 // Enable automatic attention slicing if the config sliced_attention_size is set to 0.
                 let sliced_attention_size = match config.sliced_attention_size {

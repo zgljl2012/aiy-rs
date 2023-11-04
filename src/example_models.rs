@@ -1,7 +1,7 @@
 
 use crate::{
     aiy_sd::AiyConfig,
-    unet::unet_config::UNetConfig, model_kind::ModelKind,
+    model_kind::ModelKind,
 };
 
 use diffusers::schedulers::PredictionType;
@@ -19,7 +19,6 @@ pub fn sdv1_5() -> AiyConfig {
         // UNET
         unet_weights_path: "data/unet_v1.5.fp16.safetensors".to_string(),
         unet_fp16: Some(true),
-        unet_config: UNetConfig::V1_5.config(),
         // 指定基础模型
         base_model: ModelKind::SD1_5,
         // width & height
@@ -42,7 +41,6 @@ pub fn bra_v6() -> AiyConfig {
         // UNET
         unet_weights_path: "data/brav6-unet.safetensors".to_string(),
         unet_fp16: Some(false),
-        unet_config: UNetConfig::V1_5.config(),
         // 指定基础模型
         base_model: ModelKind::SD2_1, // VAE 取值 Path
         // width & height
@@ -65,7 +63,6 @@ pub fn bra_v7() -> AiyConfig {
         // UNET
         unet_weights_path: "data/brav7-unet.safetensors".to_string(),
         unet_fp16: Some(true),
-        unet_config: UNetConfig::V1_5.config(),
         // 指定基础模型
         base_model: ModelKind::SD1_5, // VAE 取值 Path
         // width & height
@@ -87,7 +84,6 @@ pub fn sdv2_1() -> AiyConfig {
         // UNET
         unet_weights_path: "data/unet_v2.1.fp16.safetensors".to_string(),
         unet_fp16: Some(true),
-        unet_config: UNetConfig::V2_1.config(),
         // 指定基础模型
         base_model: ModelKind::SD2_1,
         // width & height
@@ -109,7 +105,6 @@ pub fn sdxl_0_9() -> AiyConfig {
         // UNET
         unet_weights_path: "data/sdxl-base-0.9-unet.safetensors".to_string(),
         unet_fp16: Some(true),
-        unet_config: UNetConfig::V1_5.config(),
         // 指定基础模型
         base_model: ModelKind::SDXL_0_9,
         // width & height

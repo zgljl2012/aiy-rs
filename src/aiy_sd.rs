@@ -1,20 +1,19 @@
-
 use std::time::SystemTime;
 
-use anyhow::Ok;
+use crate::clip;
+use crate::clip::{bpe::Bpe, Config, Tokenizer};
 use crate::model_kind::ModelKind;
 use crate::vae;
-use diffusers::schedulers::PredictionType;
+use anyhow::Ok;
 use diffusers::schedulers::ddim::{self, DDIMSchedulerConfig};
-use crate::clip::{Tokenizer, Config, bpe::Bpe};
-use crate::clip;
-use tch::nn::Module;
+use diffusers::schedulers::PredictionType;
 use regex;
-use tch::{Tensor, Device, Kind};
+use tch::nn::Module;
+use tch::{Device, Kind, Tensor};
 
-use crate::utils::output_filename;
-use crate::utils::get_device;
 use crate::unet::unet_2d;
+use crate::utils::get_device;
+use crate::utils::output_filename;
 
 const GUIDANCE_SCALE: f64 = 7.5;
 
@@ -29,11 +28,10 @@ pub struct AiyConfig {
     pub vae_fp16: Option<bool>,
     pub unet_weights_path: String,
     pub unet_fp16: Option<bool>,
-    pub unet_config: unet_2d::UNet2DConditionModelConfig,
     pub base_model: ModelKind,
     pub width: usize,
     pub height: usize,
-    pub prediction_type: Option<PredictionType>
+    pub prediction_type: Option<PredictionType>,
 }
 
 pub struct AiyStableDiffusion {
@@ -56,7 +54,7 @@ pub struct AiyStableDiffusion {
     // 默认宽高
     pub default_width: usize,
     pub default_height: usize,
-    pub default_prediction_type: Option<PredictionType>
+    pub default_prediction_type: Option<PredictionType>,
 }
 
 impl AiyStableDiffusion {
@@ -66,16 +64,44 @@ impl AiyStableDiffusion {
         let vae_device = get_device();
         let bpe = Bpe::new(cfg.vocab_path)?;
         let clip_config = cfg.base_model.clip_config();
-        let clip_model = AiyStableDiffusion::build_clip_transformer(&clip_config, &cfg.clip_weights_path, clip_device)?;
+        let clip_model = AiyStableDiffusion::build_clip_transformer(
+            &clip_config,
+            &cfg.clip_weights_path,
+            clip_device,
+        )?;
         let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, clip_config.clone())?;
         // VAE
-        let vae_model = AiyStableDiffusion::build_vae(&cfg.vae_weights_path, vae_device, cfg.base_model.clone())?;
+        let vae_model = AiyStableDiffusion::build_vae(
+            &cfg.vae_weights_path,
+            vae_device,
+            cfg.base_model.clone(),
+        )?;
         // UNET
         let in_channels = 4;
-        let unet_model = AiyStableDiffusion::build_unet(&cfg.unet_weights_path, unet_device, in_channels, cfg.unet_config)?;
+        let unet_model = AiyStableDiffusion::build_unet(
+            &cfg.unet_weights_path,
+            unet_device,
+            in_channels,
+            cfg.base_model.unet_config(),
+        )?;
         let unet_fp16 = cfg.unet_fp16.unwrap_or(false);
         let vae_fp16 = cfg.vae_fp16.unwrap_or(false);
-        Ok(Self { tokenizer, bpe, clip_device, unet_device, clip_model, vae_model, vae_device, unet_model, unet_fp16, vae_fp16, base_model: cfg.base_model, default_height: cfg.height, default_width: cfg.width, default_prediction_type: cfg.prediction_type })
+        Ok(Self {
+            tokenizer,
+            bpe,
+            clip_device,
+            unet_device,
+            clip_model,
+            vae_model,
+            vae_device,
+            unet_model,
+            unet_fp16,
+            vae_fp16,
+            base_model: cfg.base_model,
+            default_height: cfg.height,
+            default_width: cfg.width,
+            default_prediction_type: cfg.prediction_type,
+        })
     }
 
     pub fn change_clip(&mut self, clip_config: Config) -> anyhow::Result<()> {
@@ -100,7 +126,9 @@ impl AiyStableDiffusion {
     pub fn encode_prompt(&self, prompt: &str) -> anyhow::Result<Tensor> {
         let tokens = self.tokenizer.encode(&prompt)?;
         let tokens: Vec<i64> = tokens.into_iter().map(|x| x as i64).collect();
-        let tokens = Tensor::from_slice(&tokens).view((1, -1)).to(self.clip_device.clone());
+        let tokens = Tensor::from_slice(&tokens)
+            .view((1, -1))
+            .to(self.clip_device.clone());
         Ok(tokens)
     }
 
@@ -118,17 +146,11 @@ impl AiyStableDiffusion {
     fn build_vae(
         vae_weights: &str,
         device: Device,
-        base_model: ModelKind
+        base_model: ModelKind,
     ) -> anyhow::Result<vae::AutoEncoderKL> {
         let mut vs_ae = tch::nn::VarStore::new(device);
-        let autoencoder = vae::AutoEncoderKLConfig {
-            block_out_channels: vec![128, 256, 512, 512],
-            layers_per_block: 2,
-            latent_channels: 4,
-            norm_num_groups: 32,
-        };
-        // https://huggingface.co/runwayml/stable-diffusion-v1-5/blob/main/vae/config.json
-        let autoencoder = vae::AutoEncoderKL::new(vs_ae.root(), 3, 3, autoencoder.clone(), base_model);
+        let autoencoder =
+            vae::AutoEncoderKL::new(vs_ae.root(), 3, 3, base_model.vae_config(), base_model);
         vs_ae.load(vae_weights)?;
         Ok(autoencoder)
     }
@@ -142,7 +164,8 @@ impl AiyStableDiffusion {
         println!("Building the Clip transformer.");
         let text_embeddings = self.clip_model.forward(&tokens);
         let uncond_embeddings = self.clip_model.forward(&uncond_tokens);
-        let text_embeddings = Tensor::cat(&[uncond_embeddings, text_embeddings], 0).to(self.unet_device.clone());
+        let text_embeddings =
+            Tensor::cat(&[uncond_embeddings, text_embeddings], 0).to(self.unet_device.clone());
         Ok(text_embeddings)
     }
 
@@ -157,8 +180,7 @@ impl AiyStableDiffusion {
         unet_cfg: unet_2d::UNet2DConditionModelConfig,
     ) -> anyhow::Result<unet_2d::UNet2DConditionModel> {
         let mut vs_unet = tch::nn::VarStore::new(device);
-        let unet =
-            unet_2d::UNet2DConditionModel::new(vs_unet.root(), in_channels, 4, unet_cfg);
+        let unet = unet_2d::UNet2DConditionModel::new(vs_unet.root(), in_channels, 4, unet_cfg);
         vs_unet.load(unet_weights)?;
         Ok(unet)
     }
@@ -167,20 +189,45 @@ impl AiyStableDiffusion {
         ddim::DDIMScheduler::new(n_steps, config)
     }
 
-    pub fn text_2_image(&self, prompt: &str, negative_prompt: &str, final_image: &str, intermediary_images: bool, n_steps: usize, num_samples: i64, seed: i64, width: Option<usize>, height: Option<usize>) -> anyhow::Result<()> {
+    pub fn text_2_image(
+        &self,
+        prompt: &str,
+        negative_prompt: &str,
+        final_image: &str,
+        intermediary_images: bool,
+        n_steps: usize,
+        num_samples: i64,
+        seed: i64,
+        width: Option<usize>,
+        height: Option<usize>,
+    ) -> anyhow::Result<()> {
         let text_embeddings = self.embed_prompts(prompt, negative_prompt)?;
         // Scheduler
-        let scheduler_config = ddim::DDIMSchedulerConfig { prediction_type: self.default_prediction_type.unwrap_or(PredictionType::Epsilon), ..Default::default() };
+        let scheduler_config = ddim::DDIMSchedulerConfig {
+            prediction_type: self
+                .default_prediction_type
+                .unwrap_or(PredictionType::Epsilon),
+            ..Default::default()
+        };
         let scheduler = AiyStableDiffusion::build_scheduler(n_steps, scheduler_config);
 
         let no_grad_guard = tch::no_grad_guard();
         let bsize = 1;
         let start = SystemTime::now();
-        let kind = if self.unet_fp16 { Kind::Half } else { Kind::Float }; // Kind::Half
+        let kind = if self.unet_fp16 {
+            Kind::Half
+        } else {
+            Kind::Float
+        }; // Kind::Half
         for idx in 0..num_samples {
             tch::manual_seed(seed + idx);
             let mut latents = Tensor::randn(
-                [bsize, 4, (height.unwrap_or(self.default_height) as i64) / 8, (width.unwrap_or(self.default_width) as i64) / 8],
+                [
+                    bsize,
+                    4,
+                    (height.unwrap_or(self.default_height) as i64) / 8,
+                    (width.unwrap_or(self.default_width) as i64) / 8,
+                ],
                 (kind, self.unet_device),
             );
 
@@ -192,12 +239,14 @@ impl AiyStableDiffusion {
                 let latent_model_input = Tensor::cat(&[&latents, &latents], 0);
                 let latent_model_input = scheduler.scale_model_input(latent_model_input, timestep);
                 let tm = text_embeddings.to_kind(kind);
-                let noise_pred = self.unet_model.forward(&latent_model_input, timestep as f64, &tm);
+                let noise_pred = self
+                    .unet_model
+                    .forward(&latent_model_input, timestep as f64, &tm);
                 let noise_pred = noise_pred.chunk(2, 0);
                 let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
                 let noise_pred =
                     noise_pred_uncond + (noise_pred_text - noise_pred_uncond) * GUIDANCE_SCALE;
-                
+
                 latents = scheduler.step(&noise_pred, timestep, &latents);
                 // 生成中间过程图片
                 if intermediary_images {
@@ -205,13 +254,21 @@ impl AiyStableDiffusion {
                     let image = self.vae_decode(&latents);
                     let image = (image / 2 + 0.5).clamp(0., 1.).to_device(Device::Cpu);
                     let image = (image * 255.).to_kind(Kind::Uint8);
-                    let final_image =
-                        output_filename(&final_image, idx + 1, num_samples, Some(timestep_index + 1));
+                    let final_image = output_filename(
+                        &final_image,
+                        idx + 1,
+                        num_samples,
+                        Some(timestep_index + 1),
+                    );
                     tch::vision::image::save(&image, final_image)?;
                 }
             }
 
-            println!("Generating the final image for sample {}/{}.", idx + 1, num_samples);
+            println!(
+                "Generating the final image for sample {}/{}.",
+                idx + 1,
+                num_samples
+            );
             let mut latents = latents.to(self.vae_device);
             // 如果 unet 是 fp16 且 vae 不是 fp16
             if self.unet_fp16 && !self.vae_fp16 {
@@ -225,9 +282,11 @@ impl AiyStableDiffusion {
             let final_image = output_filename(&final_image, idx + 1, num_samples, None);
             tch::vision::image::save(&image, final_image)?;
         }
-        println!("=== Generated image: {:?}", SystemTime::now().duration_since(start).unwrap());
+        println!(
+            "=== Generated image: {:?}",
+            SystemTime::now().duration_since(start).unwrap()
+        );
         drop(no_grad_guard);
         Ok(())
     }
-
 }

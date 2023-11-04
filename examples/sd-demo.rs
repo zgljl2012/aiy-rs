@@ -13,7 +13,7 @@ fn run() -> anyhow::Result<()> {
 
     let start = SystemTime::now();
 
-    let aiy = AiyStableDiffusion::new(bra_v7())
+    let aiy = AiyStableDiffusion::new(sdxl_0_9())
     .unwrap();
 
     println!(

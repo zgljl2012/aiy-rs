@@ -1,6 +1,6 @@
 use tch::nn;
 
-use crate::clip::Config;
+use crate::{clip::Config, vae, unet::{unet_2d, unet_config::UNetConfig}};
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone)]
@@ -24,6 +24,51 @@ impl ModelKind {
             ModelKind::SD1_5 => Config::v1_5(),
             ModelKind::SD2_1 => Config::v2_1(),
             ModelKind::SDXL_0_9 => Config::sdxl_v_0_9(),
+        }
+    }
+
+    pub fn vae_config(&self) -> vae::AutoEncoderKLConfig {
+        let autoencoder = vae::AutoEncoderKLConfig {
+            block_out_channels: vec![128, 256, 512, 512],
+            layers_per_block: 2,
+            latent_channels: 4,
+            norm_num_groups: 32,
+        };
+        return autoencoder
+    }
+
+    pub fn unet_config(&self) -> unet_2d::UNet2DConditionModelConfig {
+        match &self {
+            ModelKind::SD1_5 => UNetConfig::V1_5.config(),
+            ModelKind::SD2_1 => UNetConfig::V2_1.config(),
+            ModelKind::SDXL_0_9 => {
+                let bc = |out_channels, use_cross_attn, attention_head_dim| unet_2d::BlockConfig {
+                    out_channels,
+                    use_cross_attn,
+                    attention_head_dim,
+                };
+                // The size of the sliced attention or 0 for automatic slicing (disabled by default)
+                let sliced_attention_size = None; 
+                let unet = unet_2d::UNet2DConditionModelConfig {
+                    blocks: vec![
+                        bc(320, false, 5),
+                        bc(640, true, 10),
+                        bc(1280, true, 20),
+                    ],
+                    center_input_sample: false,
+                    cross_attention_dim: 2048,
+                    downsample_padding: 1,
+                    flip_sin_to_cos: true,
+                    freq_shift: 0.,
+                    layers_per_block: 2,
+                    mid_block_scale_factor: 1.,
+                    norm_eps: 1e-5,
+                    norm_num_groups: 32,
+                    sliced_attention_size,
+                    use_linear_projection: true,
+                };
+                return unet
+            },
         }
     }
 
