@@ -49,6 +49,9 @@ pub struct AiyStableDiffusion {
     // 分词器
     bpe: Bpe,
     tokenizer: Tokenizer,
+    // 用于 SDXL
+    tokenizer2: Tokenizer,
+    clip_model2: clip::ClipTextTransformer,
     // 基础模型
     pub base_model: ModelKind,
     // 默认宽高
@@ -70,6 +73,13 @@ impl AiyStableDiffusion {
             clip_device,
         )?;
         let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, clip_config.clone())?;
+        let clip_config2 = Config::sdxl_v_0_9_encoder2();
+        let tokenizer2 = AiyStableDiffusion::create_tokenizer(&bpe, clip_config2.clone())?;
+        let clip_model2 = AiyStableDiffusion::build_clip_transformer(
+            &clip_config2,
+            "data/sdxl-base-0.9-clip2.fp16.safetensors",
+            clip_device,
+        )?;
         // VAE
         let vae_model = AiyStableDiffusion::build_vae(
             &cfg.vae_weights_path,
@@ -88,6 +98,8 @@ impl AiyStableDiffusion {
         let vae_fp16 = cfg.vae_fp16.unwrap_or(false);
         Ok(Self {
             tokenizer,
+            tokenizer2,
+            clip_model2,
             bpe,
             clip_device,
             unet_device,
@@ -132,6 +144,15 @@ impl AiyStableDiffusion {
         Ok(tokens)
     }
 
+    pub fn encode_prompt_by_tokenizer2(&self, prompt: &str) -> anyhow::Result<Tensor> {
+        let tokens = self.tokenizer2.encode(&prompt)?;
+        let tokens: Vec<i64> = tokens.into_iter().map(|x| x as i64).collect();
+        let tokens = Tensor::from_slice(&tokens)
+            .view((1, -1))
+            .to(self.clip_device.clone());
+        Ok(tokens)
+    }
+
     fn build_clip_transformer(
         clip_config: &Config,
         clip_weights: &str,
@@ -161,11 +182,22 @@ impl AiyStableDiffusion {
         let tokens = self.encode_prompt(&prompt)?;
         // 负面提示词
         let uncond_tokens = self.encode_prompt(negative_prompt)?;
-        println!("Building the Clip transformer.");
         let text_embeddings = self.clip_model.forward(&tokens);
         let uncond_embeddings = self.clip_model.forward(&uncond_tokens);
         let text_embeddings =
             Tensor::cat(&[uncond_embeddings, text_embeddings], 0).to(self.unet_device.clone());
+        if self.base_model.is_sdxl() {
+            // Encode prompt and negative prompt
+            // 正向提示词
+            let tokens2 = self.encode_prompt_by_tokenizer2(&prompt)?;
+            // 负面提示词
+            let uncond_tokens2 = self.encode_prompt_by_tokenizer2(negative_prompt)?;
+            let text_embeddings2 = self.clip_model2.forward(&tokens2);
+            let uncond_embeddings2 = self.clip_model2.forward(&uncond_tokens2);
+            let text_embeddings2 = Tensor::cat(&[uncond_embeddings2, text_embeddings2], 0)
+                .to(self.unet_device.clone());
+            return Ok(Tensor::cat(&[text_embeddings, text_embeddings2], -1));
+        }
         Ok(text_embeddings)
     }
 
@@ -218,7 +250,7 @@ impl AiyStableDiffusion {
             Kind::Half
         } else {
             Kind::Float
-        }; // Kind::Half
+        };
         for idx in 0..num_samples {
             tch::manual_seed(seed + idx);
             let mut latents = Tensor::randn(
@@ -246,7 +278,6 @@ impl AiyStableDiffusion {
                 let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
                 let noise_pred =
                     noise_pred_uncond + (noise_pred_text - noise_pred_uncond) * GUIDANCE_SCALE;
-
                 latents = scheduler.step(&noise_pred, timestep, &latents);
                 // 生成中间过程图片
                 if intermediary_images {

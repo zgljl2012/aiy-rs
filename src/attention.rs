@@ -51,6 +51,8 @@ impl Module for FeedForward {
     }
 }
 
+/// 交叉注意力层
+/// https://zhuanlan.zhihu.com/p/648248676
 #[derive(Debug)]
 struct CrossAttention {
     to_q: nn::Linear,

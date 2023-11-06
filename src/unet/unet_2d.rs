@@ -279,7 +279,6 @@ impl UNet2DConditionModel {
             down_block_res_xs.extend(res_xs);
             xs = _xs;
         }
-
         let new_down_block_res_xs =
             if let Some(down_block_additional_residuals) = down_block_additional_residuals {
                 let mut v = vec![];

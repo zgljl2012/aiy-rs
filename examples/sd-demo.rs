@@ -21,6 +21,10 @@ fn run() -> anyhow::Result<()> {
         SystemTime::now().duration_since(start).unwrap()
     );
 
+    let t = aiy.embed_prompts("Hello", "9999")?;
+    println!("{}", t);
+    // return Ok(());
+
     aiy.text_2_image(
         // "A very realistic photo of a rusty robot walking on a sandy beach",
         "ultra realistic close up portrait ((beautiful pale cyberpunk female with heavy black eyeliner)), blue eyes, shaved side haircut, hyper detail, cinematic lighting, magic neon, dark red city, Canon EOS R3, her is touch her hair, nikon, f/1.4, ISO 200, 1/160s, 8K, RAW, unedited, symmetrical balance, in-frame, 8K",

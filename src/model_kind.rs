@@ -19,6 +19,13 @@ pub struct VaeAttensionPaths<'a> {
 }
 
 impl ModelKind {
+    pub fn is_sdxl(&self) -> bool {
+        match &self {
+            ModelKind::SDXL_0_9 => true,
+            _ => false
+        }
+    }
+
     pub fn clip_config(&self) -> Config {
         match self {
             ModelKind::SD1_5 => Config::v1_5(),
