@@ -47,3 +47,8 @@ pub fn has_nan(xs: &Tensor) -> bool {
     let num = xs.isnan().to_kind(Kind::Int).sum(Kind::Int).greater(0).to_string(10).unwrap();
     num.starts_with("1")
 }
+
+pub fn count_nan(xs: &Tensor) -> String {
+    let num = xs.isnan().to_kind(Kind::Int).sum(Kind::Int).to_string(10).unwrap();
+    num
+}
