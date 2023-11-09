@@ -28,6 +28,8 @@ pub fn device(cpu: bool) -> Result<Device> {
 /*
 
 cargo run --example demo2 -- --prompt "a cosmonaut on a horse (hd, realistic, high-def)" --unet-weights data/unet_v2.1.fp16.safetensors --vae-weights data/vae_v2.1.fp16.safetensors --clip-weights data/clip_v2.1.fp16.safetensors --use-f16 --n-steps 10
+cargo run --example demo2 -- --prompt "a cosmonaut on a horse (hd, realistic, high-def)" --unet-weights data/sdxl-base-0.9-unet.safetensors --vae-weights data/sdxl-base-0.9-vae.safetensors --clip-weights data/sdxl-base-0.9-clip.safetensors --use-f16 --sd-version xl --n-steps 10
+
 
 */
 
