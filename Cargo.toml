@@ -11,3 +11,11 @@ regex = "1.10.2"
 clap = { version = "4.4.7", features = ["derive"] }
 torch-sys = "0.14.0"
 half = "2.3.1"
+candle-core = { git = "https://github.com/huggingface/candle.git", version = "0.3.0", features = ["cuda", "cudnn"] }
+candle-transformers = { git = "https://github.com/huggingface/candle.git", version = "0.3.0", features = ["cuda"] }
+candle-examples = { git = "https://github.com/huggingface/candle.git", version = "0.3.0", features = ["cuda", "cudnn"] }
+tokenizers = { version = "0.14.1", features = ["onig"] }
+hf-hub = { git = "https://github.com/huggingface/hf-hub.git", rev = "5bc4b45a8397198fad9e3832bb3d9c96fa2b90cf"}
+image = "0.24.7"
+tracing-chrome = "0.7.1"
+tracing-subscriber = "0.3.17"
