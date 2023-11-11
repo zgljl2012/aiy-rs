@@ -12,7 +12,7 @@ use tch::nn::Module;
 use tch::{Device, Kind, Tensor};
 
 use crate::unet::unet_2d;
-use crate::utils::get_device;
+use crate::utils::{get_device, has_nan};
 use crate::utils::output_filename;
 
 const GUIDANCE_SCALE: f64 = 7.5;
@@ -34,6 +34,12 @@ pub struct AiyConfig {
     pub prediction_type: Option<PredictionType>,
 }
 
+struct EmbededPrompts {
+    text_embeddings: Tensor,
+    pooled_prompt_embeds: Option<Tensor>,
+    negative_pooled_prompt_embeds: Option<Tensor>
+}
+
 pub struct AiyStableDiffusion {
     // clip
     pub clip_device: Device,
@@ -47,7 +53,6 @@ pub struct AiyStableDiffusion {
     pub unet_device: Device,
     unet_fp16: bool,
     // 分词器
-    bpe: Bpe,
     tokenizer: Tokenizer,
     // 用于 SDXL
     tokenizer2: Tokenizer,
@@ -72,9 +77,9 @@ impl AiyStableDiffusion {
             &cfg.clip_weights_path,
             clip_device,
         )?;
-        let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, clip_config.clone())?;
+        let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, clip_device.clone(), clip_config.clone())?;
         let clip_config2 = Config::sdxl_v_0_9_encoder2();
-        let tokenizer2 = AiyStableDiffusion::create_tokenizer(&bpe, clip_config2.clone())?;
+        let tokenizer2 = AiyStableDiffusion::create_tokenizer(&bpe, clip_device.clone(), clip_config2.clone())?;
         let clip_model2 = AiyStableDiffusion::build_clip_transformer(
             &clip_config2,
             "data/sdxl-base-0.9-clip2.fp16.safetensors",
@@ -100,7 +105,6 @@ impl AiyStableDiffusion {
             tokenizer,
             tokenizer2,
             clip_model2,
-            bpe,
             clip_device,
             unet_device,
             clip_model,
@@ -116,12 +120,7 @@ impl AiyStableDiffusion {
         })
     }
 
-    pub fn change_clip(&mut self, clip_config: Config) -> anyhow::Result<()> {
-        self.tokenizer = AiyStableDiffusion::create_tokenizer(&self.bpe, clip_config)?;
-        Ok(())
-    }
-
-    fn create_tokenizer(bpe: &Bpe, config: Config) -> anyhow::Result<Tokenizer> {
+    pub fn create_tokenizer(bpe: &Bpe, device: Device, config: Config) -> anyhow::Result<Tokenizer> {
         let re = regex::Regex::new(PAT)?;
         let tokenizer = Tokenizer {
             encoder: bpe.encoder.clone(),
@@ -131,26 +130,9 @@ impl AiyStableDiffusion {
             start_of_text_token: bpe.start_of_text_token,
             end_of_text_token: bpe.end_of_text_token,
             config: config,
+            device
         };
         Ok(tokenizer)
-    }
-
-    pub fn encode_prompt(&self, prompt: &str) -> anyhow::Result<Tensor> {
-        let tokens = self.tokenizer.encode(&prompt)?;
-        let tokens: Vec<i64> = tokens.into_iter().map(|x| x as i64).collect();
-        let tokens = Tensor::from_slice(&tokens)
-            .view((1, -1))
-            .to(self.clip_device.clone());
-        Ok(tokens)
-    }
-
-    pub fn encode_prompt_by_tokenizer2(&self, prompt: &str) -> anyhow::Result<Tensor> {
-        let tokens = self.tokenizer2.encode(&prompt)?;
-        let tokens: Vec<i64> = tokens.into_iter().map(|x| x as i64).collect();
-        let tokens = Tensor::from_slice(&tokens)
-            .view((1, -1))
-            .to(self.clip_device.clone());
-        Ok(tokens)
     }
 
     fn build_clip_transformer(
@@ -173,32 +155,55 @@ impl AiyStableDiffusion {
         let autoencoder =
             vae::AutoEncoderKL::new(vs_ae.root(), 3, 3, base_model.vae_config(), base_model);
         vs_ae.load(vae_weights)?;
+        vs_ae.set_kind(Kind::Float);
         Ok(autoencoder)
     }
 
-    pub fn embed_prompts(&self, prompt: &str, negative_prompt: &str) -> anyhow::Result<Tensor> {
+    fn embed_prompts(&self, prompt: &str, negative_prompt: &str) -> anyhow::Result<EmbededPrompts> {
         // Encode prompt and negative prompt
         // 正向提示词
-        let tokens = self.encode_prompt(&prompt)?;
+        let tokens = self.tokenizer.parse_prompt(&prompt)?;
         // 负面提示词
-        let uncond_tokens = self.encode_prompt(negative_prompt)?;
-        let text_embeddings = self.clip_model.forward(&tokens);
+        let uncond_tokens = self.tokenizer.parse_prompt(negative_prompt)?;
+        let cond_embeddings = self.clip_model.forward(&tokens);
         let uncond_embeddings = self.clip_model.forward(&uncond_tokens);
-        let text_embeddings =
-            Tensor::cat(&[uncond_embeddings, text_embeddings], 0).to(self.unet_device.clone());
+        let mut text_embeddings;
+            
+        let mut pooled_prompt_embeds = None;
+        let mut negative_pooled_prompt_embeds = None;
         if self.base_model.is_sdxl() {
-            // Encode prompt and negative prompt
-            // 正向提示词
-            let tokens2 = self.encode_prompt_by_tokenizer2(&prompt)?;
-            // 负面提示词
-            let uncond_tokens2 = self.encode_prompt_by_tokenizer2(negative_prompt)?;
-            let text_embeddings2 = self.clip_model2.forward(&tokens2);
+            let prompt2 = prompt.clone();
+            let negative_prompt2 = negative_prompt.clone();
+            let tokens2 = self.tokenizer2.parse_prompt(&prompt2)?;
+            let uncond_tokens2 = self.tokenizer2.parse_prompt(negative_prompt2)?;
+            let cond_embeddings2 = self.clip_model2.forward(&tokens2);
+            let pooled = cond_embeddings2.shallow_clone().get(0).get(0);
             let uncond_embeddings2 = self.clip_model2.forward(&uncond_tokens2);
-            let text_embeddings2 = Tensor::cat(&[uncond_embeddings2, text_embeddings2], 0)
-                .to(self.unet_device.clone());
-            return Ok(Tensor::cat(&[text_embeddings, text_embeddings2], -1));
+            let uncond_pooled = uncond_embeddings2.shallow_clone().get(0).get(0);
+
+            // 正向的
+            text_embeddings = Tensor::cat(&[cond_embeddings, cond_embeddings2], -1);
+
+            println!("---->>>>777 size: {:?}", text_embeddings.size());
+            // 处理 pooled_prompt_embeds
+            let size = text_embeddings.size();
+            let bs_embed = size.get(0).unwrap().clone();
+            let pooled = pooled.repeat(vec![1, 1]);
+            println!("---->>>>888 {}, \n{}", pooled, pooled.view_(vec![bs_embed, -1]));
+            let pooled = pooled.view_(vec![bs_embed, -1]);
+            let uncond_pooled = uncond_pooled.view_(vec![bs_embed, -1]);
+            pooled_prompt_embeds = Some(pooled);
+            negative_pooled_prompt_embeds = Some(uncond_pooled);
+
+            // 负向的
+            let neg_text_embeddings = Tensor::cat(&[uncond_embeddings, uncond_embeddings2], -1);
+            // 总的
+            text_embeddings = Tensor::cat(&[neg_text_embeddings, text_embeddings], 0);
+
+        } else {
+            text_embeddings = Tensor::cat(&[uncond_embeddings, cond_embeddings], 0).to(self.unet_device.clone());
         }
-        Ok(text_embeddings)
+        Ok(EmbededPrompts { text_embeddings, pooled_prompt_embeds, negative_pooled_prompt_embeds })
     }
 
     pub fn vae_decode(&self, t: &Tensor) -> Tensor {
@@ -214,6 +219,7 @@ impl AiyStableDiffusion {
         let mut vs_unet = tch::nn::VarStore::new(device);
         let unet = unet_2d::UNet2DConditionModel::new(vs_unet.root(), in_channels, 4, unet_cfg);
         vs_unet.load(unet_weights)?;
+        // vs_unet.set_kind(Kind::Float);
         Ok(unet)
     }
 
@@ -233,7 +239,7 @@ impl AiyStableDiffusion {
         width: Option<usize>,
         height: Option<usize>,
     ) -> anyhow::Result<()> {
-        let text_embeddings = self.embed_prompts(prompt, negative_prompt)?;
+        let EmbededPrompts { text_embeddings,  pooled_prompt_embeds, negative_pooled_prompt_embeds } = self.embed_prompts(prompt, negative_prompt)?;
         // Scheduler
         let scheduler_config = ddim::DDIMSchedulerConfig {
             prediction_type: self
@@ -241,7 +247,7 @@ impl AiyStableDiffusion {
                 .unwrap_or(PredictionType::Epsilon),
             ..Default::default()
         };
-        let scheduler = AiyStableDiffusion::build_scheduler(n_steps, scheduler_config);
+        let scheduler = AiyStableDiffusion::build_scheduler(5, scheduler_config);
 
         let no_grad_guard = tch::no_grad_guard();
         let bsize = 1;
@@ -251,6 +257,9 @@ impl AiyStableDiffusion {
         } else {
             Kind::Float
         };
+
+        let add_text_embeds = Tensor::concat(&[negative_pooled_prompt_embeds.unwrap(), pooled_prompt_embeds.unwrap()], 0);
+
         for idx in 0..num_samples {
             tch::manual_seed(seed + idx);
             let mut latents = Tensor::randn(
@@ -273,26 +282,26 @@ impl AiyStableDiffusion {
                 let tm = text_embeddings.to_kind(kind);
                 let noise_pred = self
                     .unet_model
-                    .forward(&latent_model_input, timestep as f64, &tm);
+                    .forward(&latent_model_input, timestep as f64, &tm, Some(add_text_embeds.shallow_clone()));
                 let noise_pred = noise_pred.chunk(2, 0);
                 let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
                 let noise_pred =
                     noise_pred_uncond + (noise_pred_text - noise_pred_uncond) * GUIDANCE_SCALE;
                 latents = scheduler.step(&noise_pred, timestep, &latents);
                 // 生成中间过程图片
-                if intermediary_images {
-                    let latents = latents.to(self.vae_device);
-                    let image = self.vae_decode(&latents);
-                    let image = (image / 2 + 0.5).clamp(0., 1.).to_device(Device::Cpu);
-                    let image = (image * 255.).to_kind(Kind::Uint8);
-                    let final_image = output_filename(
-                        &final_image,
-                        idx + 1,
-                        num_samples,
-                        Some(timestep_index + 1),
-                    );
-                    tch::vision::image::save(&image, final_image)?;
-                }
+                // if intermediary_images {
+                //     let latents = latents.to(self.vae_device);
+                //     let image = self.vae_decode(&latents);
+                //     let image = (image / 2 + 0.5).clamp(0., 1.).to_device(Device::Cpu);
+                //     let image = (image * 255.).to_kind(Kind::Uint8);
+                //     let final_image = output_filename(
+                //         &final_image,
+                //         idx + 1,
+                //         num_samples,
+                //         Some(timestep_index + 1),
+                //     );
+                //     tch::vision::image::save(&image, final_image)?;
+                // }
             }
 
             println!(
@@ -307,9 +316,17 @@ impl AiyStableDiffusion {
             } else if self.vae_fp16 && !self.unet_fp16 {
                 latents = latents.to_kind(Kind::Half)
             }
+            latents = latents.to_kind(Kind::Float);
+
+            println!("final latents has nan: {}", has_nan(&latents));
             let image = self.vae_decode(&latents);
-            let image = (image / 2 + 0.5).clamp(0., 1.).to_device(Device::Cpu);
+            println!("image1: {}", image);
+            let image = (image / 2 + 0.5);
+            println!("image2: {}", image);
+            let image = image.clamp(0., 1.).to_device(Device::Cpu);
+            println!("image3: {}", image);
             let image = (image * 255.).to_kind(Kind::Uint8);
+            println!("image4: {}\n {}", image, image.to_kind(Kind::Float).std(true));
             let final_image = output_filename(&final_image, idx + 1, num_samples, None);
             tch::vision::image::save(&image, final_image)?;
         }

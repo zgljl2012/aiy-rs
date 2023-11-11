@@ -7,16 +7,17 @@ pub enum UNetConfig {
 
 impl UNetConfig {
     pub fn config(&self) -> unet_2d::UNet2DConditionModelConfig {
-        let bc = |out_channels, use_cross_attn, attention_head_dim| unet_2d::BlockConfig {
+        let bc = |out_channels, use_cross_attn, attention_head_dim, transformer_layers_per_block| unet_2d::BlockConfig {
             out_channels,
             use_cross_attn,
             attention_head_dim,
+            transformer_layers_per_block
         };
         // The size of the sliced attention or 0 for automatic slicing (disabled by default)
         let sliced_attention_size = None; 
         // https://huggingface.co/runwayml/stable-diffusion-v1-5/blob/main/unet/config.json
         let v1_5_unet = unet_2d::UNet2DConditionModelConfig {
-            blocks: vec![bc(320, true, 8), bc(640, true, 8), bc(1280, true, 8), bc(1280, false, 8)],
+            blocks: vec![bc(320, true, 8, 1), bc(640, true, 8, 1), bc(1280, true, 8, 1), bc(1280, false, 8, 1)],
             center_input_sample: false,
             cross_attention_dim: 768,
             downsample_padding: 1,
@@ -33,10 +34,10 @@ impl UNetConfig {
         // https://huggingface.co/stabilityai/stable-diffusion-2-1/blob/main/unet/config.json
         let v2_1_unet = unet_2d::UNet2DConditionModelConfig {
             blocks: vec![
-                bc(320, true, 5),
-                bc(640, true, 10),
-                bc(1280, true, 20),
-                bc(1280, false, 20),
+                bc(320, true, 5, 1),
+                bc(640, true, 10, 1),
+                bc(1280, true, 20, 1),
+                bc(1280, false, 20, 1),
             ],
             center_input_sample: false,
             cross_attention_dim: 1024,

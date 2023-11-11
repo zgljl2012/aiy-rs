@@ -4,12 +4,8 @@
 //! pairs of images with related texts.
 //!
 //! https://github.com/openai/CLIP
-use std::collections::{HashMap, HashSet};
-use std::io::BufRead;
 use tch::{nn, nn::Module, Device, Kind, Tensor};
 use half::{self, f16};
-
-use self::bytes_to_unicode::BYTES_TO_UNICODE;
 
 mod bytes_to_unicode;
 pub mod bpe;

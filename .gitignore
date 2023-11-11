@@ -1,3 +1,5 @@
 /target
 data
 *.png
+cuda_learn
+!cuda_learn/*.cu

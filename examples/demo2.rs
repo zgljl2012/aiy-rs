@@ -316,9 +316,11 @@ fn text_embeddings(
     let uncond_tokens = Tensor::new(uncond_tokens.as_slice(), device)?.unsqueeze(0)?;
 
     println!("Building the Clip transformer.");
+    let mut clip_weights = Some("data/sdxl-base-0.9-clip.safetensors".to_string());
     let clip_weights_file = if first {
         ModelFile::Clip
     } else {
+        clip_weights = Some("data/sdxl-base-0.9-clip2.fp16.safetensors".to_string());
         ModelFile::Clip2
     };
     let clip_weights = clip_weights_file.get(clip_weights, sd_version, false)?;
@@ -514,8 +516,10 @@ fn run(args: Args) -> Result<()> {
             num_samples
         );
         let image = vae.decode(&(&latents / 0.18215)?)?;
+        println!("{}", image);
         let image = ((image / 2.)? + 0.5)?.to_device(&Device::Cpu)?;
         let image = (image.clamp(0f32, 1.)? * 255.)?.to_dtype(DType::U8)?.i(0)?;
+        println!("--------\nimage: {}", image);
         let image_filename = output_filename(&final_image, idx + 1, num_samples, None);
         candle_examples::save_image(&image, image_filename)?
     }

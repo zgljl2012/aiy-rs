@@ -49,18 +49,19 @@ impl ModelKind {
             ModelKind::SD1_5 => UNetConfig::V1_5.config(),
             ModelKind::SD2_1 => UNetConfig::V2_1.config(),
             ModelKind::SDXL_0_9 => {
-                let bc = |out_channels, use_cross_attn, attention_head_dim| unet_2d::BlockConfig {
+                let bc = |out_channels, use_cross_attn, attention_head_dim, transformer_layers_per_block| unet_2d::BlockConfig {
                     out_channels,
                     use_cross_attn,
                     attention_head_dim,
+                    transformer_layers_per_block
                 };
                 // The size of the sliced attention or 0 for automatic slicing (disabled by default)
                 let sliced_attention_size = None; 
                 let unet = unet_2d::UNet2DConditionModelConfig {
                     blocks: vec![
-                        bc(320, false, 5),
-                        bc(640, true, 10),
-                        bc(1280, true, 20),
+                        bc(320, false, 5, 1),
+                        bc(640, true, 10, 2),
+                        bc(1280, true, 20, 10),
                     ],
                     center_input_sample: false,
                     cross_attention_dim: 2048,

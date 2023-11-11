@@ -4,13 +4,14 @@
 //! timestep and return a denoised version of the input.
 use crate::embeddings::{TimestepEmbedding, Timesteps};
 use super::unet_2d_blocks::*;
-use tch::{nn, Tensor};
+use tch::{nn::{self, Module}, Tensor, Kind};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BlockConfig {
     pub out_channels: i64,
     pub use_cross_attn: bool,
     pub attention_head_dim: i64,
+    pub transformer_layers_per_block: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -36,10 +37,10 @@ impl Default for UNet2DConditionModelConfig {
             flip_sin_to_cos: true,
             freq_shift: 0.,
             blocks: vec![
-                BlockConfig { out_channels: 320, use_cross_attn: true, attention_head_dim: 8 },
-                BlockConfig { out_channels: 640, use_cross_attn: true, attention_head_dim: 8 },
-                BlockConfig { out_channels: 1280, use_cross_attn: true, attention_head_dim: 8 },
-                BlockConfig { out_channels: 1280, use_cross_attn: false, attention_head_dim: 8 },
+                BlockConfig { out_channels: 320, use_cross_attn: true, attention_head_dim: 8, transformer_layers_per_block: 1 },
+                BlockConfig { out_channels: 640, use_cross_attn: true, attention_head_dim: 8, transformer_layers_per_block: 1 },
+                BlockConfig { out_channels: 1280, use_cross_attn: true, attention_head_dim: 8, transformer_layers_per_block: 1 },
+                BlockConfig { out_channels: 1280, use_cross_attn: false, attention_head_dim: 8, transformer_layers_per_block: 1 },
             ],
             layers_per_block: 2,
             downsample_padding: 1,
@@ -70,6 +71,9 @@ pub struct UNet2DConditionModel {
     conv_in: nn::Conv2D,
     time_proj: Timesteps,
     time_embedding: TimestepEmbedding,
+    // SDXL 有此 embedding
+    add_time_proj: Option<Timesteps>,
+    add_embedding: Option<TimestepEmbedding>,
     down_blocks: Vec<UNetDownBlock>,
     mid_block: UNetMidBlock2DCrossAttn,
     up_blocks: Vec<UNetUpBlock>,
@@ -97,11 +101,15 @@ impl UNet2DConditionModel {
             Timesteps::new(b_channels, config.flip_sin_to_cos, config.freq_shift, vs.device());
         let time_embedding =
             TimestepEmbedding::new(&vs / "time_embedding", b_channels, time_embed_dim);
+        // TODO 处理 XL 和 1.5 2.1 的区别
+        let addition_time_embed_dim = 256;
+        let add_time_proj = Some(Timesteps::new(addition_time_embed_dim, config.flip_sin_to_cos, config.freq_shift, vs.device()));
+        let add_embedding = Some(TimestepEmbedding::new(&vs / "add_embedding", 2816, time_embed_dim));
         let vs_db = &vs / "down_blocks";
         // 读取 down_blocks
         let down_blocks = (0..n_blocks)
             .map(|i| {
-                let BlockConfig { out_channels, use_cross_attn, attention_head_dim } =
+                let BlockConfig { out_channels, use_cross_attn, attention_head_dim, transformer_layers_per_block } =
                     config.blocks[i];
 
                 // Enable automatic attention slicing if the config sliced_attention_size is set to 0.
@@ -122,6 +130,7 @@ impl UNet2DConditionModel {
                 };
                 if use_cross_attn {
                     let config = CrossAttnDownBlock2DConfig {
+                        depth: transformer_layers_per_block,
                         downblock: db_cfg,
                         attn_num_head_channels: attention_head_dim,
                         cross_attention_dim: config.cross_attention_dim,
@@ -169,7 +178,7 @@ impl UNet2DConditionModel {
         // 读取 up_blocks 
         let up_blocks = (0..n_blocks)
             .map(|i| {
-                let BlockConfig { out_channels, use_cross_attn, attention_head_dim } =
+                let BlockConfig { out_channels, use_cross_attn, attention_head_dim, transformer_layers_per_block } =
                     config.blocks[n_blocks - 1 - i]; // blocks 倒过来就是 up_blocks，正着数就是 down_blocks
 
                 // Enable automatic attention slicing if the config sliced_attention_size is set to 0.
@@ -193,6 +202,7 @@ impl UNet2DConditionModel {
                 };
                 if use_cross_attn {
                     let config = CrossAttnUpBlock2DConfig {
+                        depth: transformer_layers_per_block,
                         upblock: ub_cfg,
                         attn_num_head_channels: attention_head_dim,
                         cross_attention_dim: config.cross_attention_dim,
@@ -230,6 +240,8 @@ impl UNet2DConditionModel {
             conv_in,
             time_proj,
             time_embedding,
+            add_time_proj,
+            add_embedding,
             down_blocks,
             mid_block,
             up_blocks,
@@ -240,9 +252,33 @@ impl UNet2DConditionModel {
     }
 }
 
+fn _get_add_time_ids(/*original_size: i32, crops_coords_top_left: i32, target_size: i32, dtype: Kind*/) -> Tensor {
+    let add_time_ids = vec![1024, 1024, 0, 0, 1024, 1024];
+    // let addition_time_embed_dim = 256;
+    // let projection_dim = 1280;
+    // let passed_add_embed_dim = add_time_ids.len() * addition_time_embed_dim + projection_dim;
+    let t = Tensor::from_slice(&add_time_ids);
+    return t.to_kind(Kind::Float).reshape(vec![1, -1]);
+    // add_time_ids = list(original_size + crops_coords_top_left + target_size)
+
+    //     passed_add_embed_dim = (
+    //         self.unet.config.addition_time_embed_dim * len(add_time_ids) + self.text_encoder_2.config.projection_dim
+    //     )
+    //     expected_add_embed_dim = self.unet.add_embedding.linear_1.in_features
+
+    //     if expected_add_embed_dim != passed_add_embed_dim:
+    //         raise ValueError(
+    //             f"Model expects an added time embedding vector of length {expected_add_embed_dim}, but a vector of {passed_add_embed_dim} was created. The model has an incorrect config. Please check `unet.config.time_embedding_type` and `text_encoder_2.config.projection_dim`."
+    //         )
+
+    //     add_time_ids = torch.tensor([add_time_ids], dtype=dtype)
+    //     return add_time_ids
+    // todo!()
+}
+
 impl UNet2DConditionModel {
-    pub fn forward(&self, xs: &Tensor, timestep: f64, encoder_hidden_states: &Tensor) -> Tensor {
-        self.forward_with_additional_residuals(xs, timestep, encoder_hidden_states, None, None)
+    pub fn forward(&self, xs: &Tensor, timestep: f64, encoder_hidden_states: &Tensor, add_text_embeds: Option<Tensor>) -> Tensor {
+        self.forward_with_additional_residuals(xs, timestep, encoder_hidden_states, None, None, add_text_embeds)
     }
 
     pub fn forward_with_additional_residuals(
@@ -252,6 +288,7 @@ impl UNet2DConditionModel {
         encoder_hidden_states: &Tensor,
         down_block_additional_residuals: Option<&[Tensor]>,
         mid_block_additional_residual: Option<&Tensor>,
+        pooled_prompt_embeds: Option<Tensor>
     ) -> Tensor {
         let (bsize, _channels, height, width) = xs.size4().unwrap();
         let device = xs.device();
@@ -263,7 +300,37 @@ impl UNet2DConditionModel {
         // 0. center input if necessary
         let xs = if self.config.center_input_sample { xs * 2.0 - 1.0 } else { xs.shallow_clone() };
         // 1. time
-        let emb = (Tensor::ones([bsize], (xs.kind(), device)) * timestep).apply(&self.time_proj).apply(&self.time_embedding);
+        let mut emb = (Tensor::ones([bsize], (xs.kind(), device)) * timestep).apply(&self.time_proj).apply(&self.time_embedding);
+        match &self.add_embedding {
+            Some(add_embedding) => {
+                println!("--->>>>1 {:?} \n{:?} \n{:?}", emb, add_embedding, encoder_hidden_states);
+                let text_embeds = pooled_prompt_embeds.unwrap();
+                let time_ids = Tensor::concat(&[_get_add_time_ids(), _get_add_time_ids()], 0).to_device(text_embeds.device());
+                println!("---->>>> 1.1 {}", time_ids);
+                match &self.add_time_proj {
+                    Some(add_time_proj) => {
+                        let time_embeds = add_time_proj.forward(&time_ids.flatten(0, -1));
+                        println!("---->>>>1.5 {}", time_embeds);
+                        let text_embeds_size = text_embeds.size();
+                        let time_embeds = time_embeds.reshape(vec![text_embeds_size.get(0).unwrap().clone(), -1]);
+                        println!("--->>>2 {} \n{}", text_embeds, time_embeds);
+                        let add_embeds = Tensor::concat(&[text_embeds, time_embeds], -1);
+                        let add_embeds = add_embeds.to_kind(emb.kind());
+                        println!("--->>>>3 {}", add_embeds);
+                        let aug_emb = add_embedding.forward(&add_embeds);
+                        println!("--->>>>4 {}", aug_emb);
+                        emb = emb + aug_emb;
+                    },
+                    None => todo!(),
+                }
+
+                // let add_embeds = Tensor::concat()
+                // let aug_emb = add_embedding.forward(encoder_hidden_states);
+                // println!("--->>>>2");
+                // emb = Tensor::concat(&[emb, aug_emb], 0);
+            },
+            None => todo!(),
+        };
         // 2. pre-process
         let xs = xs.apply(&self.conv_in);
         // 3. down

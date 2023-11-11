@@ -1,5 +1,8 @@
 use std::{collections::{HashMap, HashSet}, io::BufRead};
 
+use anyhow::Ok;
+use tch::{Tensor, Device};
+
 use super::{Config, bytes_to_unicode::BYTES_TO_UNICODE};
 
 const PAT: &str =
@@ -16,12 +19,14 @@ pub struct Tokenizer {
     pub start_of_text_token: usize,
     pub end_of_text_token: usize,
     pub config: Config,
+    pub device: Device
 }
 
 impl Tokenizer {
     /// Creates a new CLIP tokenizer, this takes as input the path for the bpe vocabulary file.
     pub fn create<T: AsRef<std::path::Path> + std::fmt::Debug>(
         bpe_path: T,
+        device: Device,
         c: &Config,
     ) -> anyhow::Result<Tokenizer> {
         let bpe_file = crate::utils::file_open(bpe_path)?;
@@ -65,6 +70,7 @@ impl Tokenizer {
             start_of_text_token,
             end_of_text_token,
             config: c.clone(),
+            device
         };
         Ok(tokenizer)
     }
@@ -167,19 +173,26 @@ impl Tokenizer {
         let s: String = tokens.iter().map(|token| self.decoder[token].as_str()).collect();
         s.replace("</w>", " ")
     }
+
+    pub fn parse_prompt(&self, prompt: &str) -> anyhow::Result<Tensor> {
+        let tokens = self.encode(&prompt)?;
+        let tokens: Vec<i64> = tokens.into_iter().map(|x| x as i64).collect();
+        let tokens = Tensor::from_slice(&tokens)
+            .view((1, -1))
+            .to(self.device.clone());
+        Ok(tokens)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{model_kind::ModelKind, clip::bpe::Bpe, aiy_sd::AiyStableDiffusion};
 
-    use super::Tokenizer;
-
     #[test]
     fn test_tokenizer() {
         let bpe_path = "data/bpe_simple_vocab_16e6.txt";
         let bpe = Bpe::new(bpe_path.to_string()).unwrap();
-        let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, ModelKind::SD2_1.clip_config()).unwrap();
+        let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, tch::Device::Cpu, ModelKind::SD2_1.clip_config()).unwrap();
         let r = tokenizer.encode("A horse with a dog").unwrap();
         println!("{:?}", r)
     }

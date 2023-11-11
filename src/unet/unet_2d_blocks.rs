@@ -494,6 +494,7 @@ pub struct CrossAttnDownBlock2DConfig {
     // attention_type: "default"
     pub sliced_attention_size: Option<i64>,
     pub use_linear_projection: bool,
+    pub depth: i64,
 }
 
 impl Default for CrossAttnDownBlock2DConfig {
@@ -504,6 +505,7 @@ impl Default for CrossAttnDownBlock2DConfig {
             cross_attention_dim: 1280,
             sliced_attention_size: None,
             use_linear_projection: false,
+            depth: 1
         }
     }
 }
@@ -532,7 +534,7 @@ impl CrossAttnDownBlock2D {
         );
         let n_heads = config.attn_num_head_channels;
         let cfg = SpatialTransformerConfig {
-            depth: 1,
+            depth: config.depth,
             context_dim: Some(config.cross_attention_dim),
             num_groups: config.downblock.resnet_groups,
             sliced_attention_size: config.sliced_attention_size,
@@ -670,6 +672,7 @@ pub struct CrossAttnUpBlock2DConfig {
     // attention_type: "default"
     pub sliced_attention_size: Option<i64>,
     pub use_linear_projection: bool,
+    pub depth: i64,
 }
 
 impl Default for CrossAttnUpBlock2DConfig {
@@ -680,6 +683,7 @@ impl Default for CrossAttnUpBlock2DConfig {
             cross_attention_dim: 1280,
             sliced_attention_size: None,
             use_linear_projection: false,
+            depth: 1
         }
     }
 }
@@ -710,7 +714,7 @@ impl CrossAttnUpBlock2D {
         );
         let n_heads = config.attn_num_head_channels;
         let cfg = SpatialTransformerConfig {
-            depth: 1,
+            depth: config.depth,
             context_dim: Some(config.cross_attention_dim),
             num_groups: config.upblock.resnet_groups,
             sliced_attention_size: config.sliced_attention_size,

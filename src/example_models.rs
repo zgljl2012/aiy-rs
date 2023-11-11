@@ -108,8 +108,8 @@ pub fn sdxl_0_9() -> AiyConfig {
         // 指定基础模型
         base_model: ModelKind::SDXL_0_9,
         // width & height
-        width: 768,
-        height: 768,
+        width: 1024,
+        height: 1024,
         prediction_type: Some(PredictionType::VPrediction)
     }
 }
