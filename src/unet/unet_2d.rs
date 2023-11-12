@@ -2,7 +2,7 @@
 //!
 //! The 2D Unet models take as input a noisy sample and the current diffusion
 //! timestep and return a denoised version of the input.
-use crate::embeddings::{TimestepEmbedding, Timesteps};
+use crate::{embeddings::{TimestepEmbedding, Timesteps}, model_kind::ModelKind};
 use super::unet_2d_blocks::*;
 use tch::{nn::{self, Module}, Tensor, Kind};
 
@@ -88,6 +88,7 @@ impl UNet2DConditionModel {
         in_channels: i64,
         out_channels: i64,
         config: UNet2DConditionModelConfig,
+        kind: &ModelKind
     ) -> Self {
         let n_blocks = config.blocks.len();
         let b_channels = config.blocks[0].out_channels;
@@ -103,8 +104,14 @@ impl UNet2DConditionModel {
             TimestepEmbedding::new(&vs / "time_embedding", b_channels, time_embed_dim);
         // TODO 处理 XL 和 1.5 2.1 的区别
         let addition_time_embed_dim = 256;
-        let add_time_proj = Some(Timesteps::new(addition_time_embed_dim, config.flip_sin_to_cos, config.freq_shift, vs.device()));
-        let add_embedding = Some(TimestepEmbedding::new(&vs / "add_embedding", 2816, time_embed_dim));
+        let mut add_time_proj = None;
+        let mut add_embedding = None;
+        if kind.is_sdxl() {
+            add_time_proj = Some(Timesteps::new(addition_time_embed_dim, config.flip_sin_to_cos, config.freq_shift, vs.device()));
+            add_embedding = Some(TimestepEmbedding::new(&vs / "add_embedding", 2816, time_embed_dim));
+        }
+        
+        
         let vs_db = &vs / "down_blocks";
         // 读取 down_blocks
         let down_blocks = (0..n_blocks)
@@ -329,7 +336,7 @@ impl UNet2DConditionModel {
                 // println!("--->>>>2");
                 // emb = Tensor::concat(&[emb, aug_emb], 0);
             },
-            None => todo!(),
+            None => {},
         };
         // 2. pre-process
         let xs = xs.apply(&self.conv_in);

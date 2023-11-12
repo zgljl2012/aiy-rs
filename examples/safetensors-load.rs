@@ -35,11 +35,11 @@ fn main() {
     let mut first_level = HashSet::new();
     let t = Tensor::read_safetensors(path).unwrap();
     for (name, _value) in &t {
-        if name.starts_with("up_blocks.1") {
+        if name.starts_with("mid_block.attentions.0.transformer_blocks") {
             println!("{}", name);
             let fields: Vec<String> = name.clone().split(".").into_iter().map(|v| v.to_owned()).collect();
             if fields.len() > 2 {
-                first_level.insert(fields[3].clone());
+                first_level.insert(fields[4].clone());
             }
         }
         // if name.starts_with("first_stage_model.text") || name.starts_with("text_model") {

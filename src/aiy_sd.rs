@@ -98,6 +98,7 @@ impl AiyStableDiffusion {
             unet_device,
             in_channels,
             cfg.base_model.unet_config(),
+            &cfg.base_model
         )?;
         let unet_fp16 = cfg.unet_fp16.unwrap_or(false);
         let vae_fp16 = cfg.vae_fp16.unwrap_or(false);
@@ -215,9 +216,10 @@ impl AiyStableDiffusion {
         device: Device,
         in_channels: i64,
         unet_cfg: unet_2d::UNet2DConditionModelConfig,
+        kind: &ModelKind
     ) -> anyhow::Result<unet_2d::UNet2DConditionModel> {
         let mut vs_unet = tch::nn::VarStore::new(device);
-        let unet = unet_2d::UNet2DConditionModel::new(vs_unet.root(), in_channels, 4, unet_cfg);
+        let unet = unet_2d::UNet2DConditionModel::new(vs_unet.root(), in_channels, 4, unet_cfg, kind);
         vs_unet.load(unet_weights)?;
         // vs_unet.set_kind(Kind::Float);
         Ok(unet)
@@ -247,7 +249,7 @@ impl AiyStableDiffusion {
                 .unwrap_or(PredictionType::Epsilon),
             ..Default::default()
         };
-        let scheduler = AiyStableDiffusion::build_scheduler(5, scheduler_config);
+        let scheduler = AiyStableDiffusion::build_scheduler(2, scheduler_config);
 
         let no_grad_guard = tch::no_grad_guard();
         let bsize = 1;
@@ -258,7 +260,10 @@ impl AiyStableDiffusion {
             Kind::Float
         };
 
-        let add_text_embeds = Tensor::concat(&[negative_pooled_prompt_embeds.unwrap(), pooled_prompt_embeds.unwrap()], 0);
+        let mut add_text_embeds = None;
+        if pooled_prompt_embeds.is_some() {
+            add_text_embeds = Some(Tensor::concat(&[negative_pooled_prompt_embeds.unwrap(), pooled_prompt_embeds.unwrap()], 0));
+        }
 
         for idx in 0..num_samples {
             tch::manual_seed(seed + idx);
@@ -282,7 +287,10 @@ impl AiyStableDiffusion {
                 let tm = text_embeddings.to_kind(kind);
                 let noise_pred = self
                     .unet_model
-                    .forward(&latent_model_input, timestep as f64, &tm, Some(add_text_embeds.shallow_clone()));
+                    .forward(&latent_model_input, timestep as f64, &tm, match &add_text_embeds {
+                        Some(t) => Some(t.shallow_clone()),
+                        None => None,
+                    });
                 let noise_pred = noise_pred.chunk(2, 0);
                 let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
                 let noise_pred =
@@ -321,7 +329,7 @@ impl AiyStableDiffusion {
             println!("final latents has nan: {}", has_nan(&latents));
             let image = self.vae_decode(&latents);
             println!("image1: {}", image);
-            let image = (image / 2 + 0.5);
+            let image = image / 2 + 0.5;
             println!("image2: {}", image);
             let image = image.clamp(0., 1.).to_device(Device::Cpu);
             println!("image3: {}", image);
