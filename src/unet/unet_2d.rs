@@ -3,7 +3,7 @@
 //! The 2D Unet models take as input a noisy sample and the current diffusion
 //! timestep and return a denoised version of the input.
 use crate::{embeddings::{TimestepEmbedding, Timesteps}, model_kind::ModelKind};
-use super::unet_2d_blocks::*;
+use super::{unet_2d_blocks::*, UNetMidBlock2DCrossAttn, UNetMidBlock2DCrossAttnConfig};
 use tch::{nn::{self, Module}, Tensor, Kind};
 
 #[derive(Debug, Clone, Copy)]

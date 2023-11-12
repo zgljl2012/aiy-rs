@@ -1,8 +1,8 @@
 use crate::{
     model_kind::ModelKind,
-    unet::unet_2d_blocks::{
-        DownEncoderBlock2D, DownEncoderBlock2DConfig, UNetMidBlock2D, UNetMidBlock2DConfig,
-    },
+    unet::{unet_2d_blocks::{
+        DownEncoderBlock2D, DownEncoderBlock2DConfig
+    }, UNetMidBlock2DConfig, UNetMidBlock2D},
 };
 use tch::{nn, nn::Module, Tensor};
 

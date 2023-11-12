@@ -1,6 +1,6 @@
 use tch::{nn::{self, Module}, Tensor};
 
-use crate::{unet::unet_2d_blocks::{UpDecoderBlock2D, UNetMidBlock2D, UNetMidBlock2DConfig, UpDecoderBlock2DConfig}, model_kind::ModelKind, utils};
+use crate::{unet::{unet_2d_blocks::{UpDecoderBlock2D, UpDecoderBlock2DConfig}, UNetMidBlock2D, UNetMidBlock2DConfig}, model_kind::ModelKind, utils};
 
 #[derive(Debug, Clone)]
 pub struct DecoderConfig {
