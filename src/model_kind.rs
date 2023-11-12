@@ -1,13 +1,18 @@
 use tch::nn;
 
-use crate::{clip::Config, vae, unet::{unet_2d, unet_config::UNetConfig}};
+use crate::{
+    clip::Config,
+    schedulers::{ddim::DDIMSchedulerConfig, PredictionType, SchedulerKind, euler_discrete::EulerDiscreteSchedulerConfig},
+    unet::{unet_2d, unet_config::UNetConfig},
+    vae,
+};
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone)]
 pub enum ModelKind {
     SD1_5,
     SD2_1,
-    SDXL_0_9
+    SDXL_0_9,
 }
 
 pub struct VaeAttensionPaths<'a> {
@@ -22,7 +27,7 @@ impl ModelKind {
     pub fn is_sdxl(&self) -> bool {
         match &self {
             ModelKind::SDXL_0_9 => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -41,7 +46,7 @@ impl ModelKind {
             latent_channels: 4,
             norm_num_groups: 32,
         };
-        return autoencoder
+        return autoencoder;
     }
 
     pub fn unet_config(&self) -> unet_2d::UNet2DConditionModelConfig {
@@ -49,14 +54,18 @@ impl ModelKind {
             ModelKind::SD1_5 => UNetConfig::V1_5.config(),
             ModelKind::SD2_1 => UNetConfig::V2_1.config(),
             ModelKind::SDXL_0_9 => {
-                let bc = |out_channels, use_cross_attn, attention_head_dim, transformer_layers_per_block| unet_2d::BlockConfig {
-                    out_channels,
-                    use_cross_attn,
-                    attention_head_dim,
-                    transformer_layers_per_block
-                };
+                let bc =
+                    |out_channels,
+                     use_cross_attn,
+                     attention_head_dim,
+                     transformer_layers_per_block| unet_2d::BlockConfig {
+                        out_channels,
+                        use_cross_attn,
+                        attention_head_dim,
+                        transformer_layers_per_block,
+                    };
                 // The size of the sliced attention or 0 for automatic slicing (disabled by default)
-                let sliced_attention_size = None; 
+                let sliced_attention_size = None;
                 let unet = unet_2d::UNet2DConditionModelConfig {
                     blocks: vec![
                         bc(320, false, 5, 1),
@@ -75,8 +84,8 @@ impl ModelKind {
                     sliced_attention_size,
                     use_linear_projection: true,
                 };
-                return unet
-            },
+                return unet;
+            }
         }
     }
 
@@ -99,6 +108,22 @@ impl ModelKind {
             ModelKind::SD1_5 => v1_5,
             ModelKind::SD2_1 => v2_1,
             ModelKind::SDXL_0_9 => v1_5,
+        }
+    }
+
+    pub fn scheduler_kind(&self) -> SchedulerKind {
+        match &self {
+            ModelKind::SDXL_0_9 => SchedulerKind::EulerDiscreteScheduler(EulerDiscreteSchedulerConfig {
+                
+                ..Default::default()
+            }),
+            ModelKind::SD2_1 => SchedulerKind::DDIMScheduler(DDIMSchedulerConfig {
+                prediction_type: PredictionType::VPrediction,
+                ..Default::default()
+            }),
+            _ => SchedulerKind::DDIMScheduler(DDIMSchedulerConfig {
+                ..Default::default()
+            }),
         }
     }
 }

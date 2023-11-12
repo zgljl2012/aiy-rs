@@ -4,7 +4,7 @@ use crate::{
     model_kind::ModelKind,
 };
 
-use diffusers::schedulers::PredictionType;
+use crate::schedulers::PredictionType;
 
 
 #[allow(dead_code)]

@@ -3,10 +3,12 @@ use std::time::SystemTime;
 use crate::clip;
 use crate::clip::{bpe::Bpe, Config, Tokenizer};
 use crate::model_kind::ModelKind;
+use crate::schedulers::{PredictionType, ddim, SchedulerKind};
+use crate::schedulers::ddim::DDIMSchedulerConfig;
 use crate::vae;
 use anyhow::Ok;
-use diffusers::schedulers::ddim::{self, DDIMSchedulerConfig};
-use diffusers::schedulers::PredictionType;
+// use diffusers::schedulers::ddim::{self, DDIMSchedulerConfig};
+// use diffusers::schedulers::PredictionType;
 use regex;
 use tch::nn::Module;
 use tch::{Device, Kind, Tensor};
@@ -247,7 +249,8 @@ impl AiyStableDiffusion {
                 .unwrap_or(PredictionType::Epsilon),
             ..Default::default()
         };
-        let scheduler = AiyStableDiffusion::build_scheduler(n_steps, scheduler_config);
+        // let scheduler = AiyStableDiffusion::build_scheduler(n_steps, scheduler_config);
+        let scheduler = self.base_model.scheduler_kind().build(n_steps);
 
         let no_grad_guard = tch::no_grad_guard();
         let bsize = 1;

@@ -2,7 +2,7 @@ use std::time::SystemTime;
 
 use aiy_rs::{
     aiy_sd::AiyStableDiffusion,
-    example_models::{bra_v7, sdxl_0_9, sdv2_1},
+    example_models::{bra_v7, sdxl_0_9, sdv2_1, sdv1_5},
 };
 
 fn run() -> anyhow::Result<()> {
@@ -22,7 +22,7 @@ fn run() -> anyhow::Result<()> {
     );
 
     aiy.text_2_image(
-        "A very realistic photo of a rusty robot walking on a sandy beach, sea and tree",
+        "A very realistic photo of a rusty robot walking on a sandy beach, sea and a green tree",
         // "An astronaut riding a green horse",
         "",
         // "ultra realistic close up portrait ((beautiful pale cyberpunk female with heavy black eyeliner)), blue eyes, shaved side haircut, hyper detail, cinematic lighting, magic neon, dark red city, Canon EOS R3, her is touch her hair, nikon, f/1.4, ISO 200, 1/160s, 8K, RAW, unedited, symmetrical balance, in-frame, 8K",
