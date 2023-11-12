@@ -3,12 +3,8 @@ use std::time::SystemTime;
 use crate::clip;
 use crate::clip::{bpe::Bpe, Config, Tokenizer};
 use crate::model_kind::ModelKind;
-use crate::schedulers::{PredictionType, ddim, SchedulerKind};
-use crate::schedulers::ddim::DDIMSchedulerConfig;
 use crate::vae;
 use anyhow::Ok;
-// use diffusers::schedulers::ddim::{self, DDIMSchedulerConfig};
-// use diffusers::schedulers::PredictionType;
 use regex;
 use tch::nn::Module;
 use tch::{Device, Kind, Tensor};
@@ -33,7 +29,6 @@ pub struct AiyConfig {
     pub base_model: ModelKind,
     pub width: usize,
     pub height: usize,
-    pub prediction_type: Option<PredictionType>,
 }
 
 struct EmbededPrompts {
@@ -64,7 +59,6 @@ pub struct AiyStableDiffusion {
     // 默认宽高
     pub default_width: usize,
     pub default_height: usize,
-    pub default_prediction_type: Option<PredictionType>,
 }
 
 impl AiyStableDiffusion {
@@ -119,7 +113,6 @@ impl AiyStableDiffusion {
             base_model: cfg.base_model,
             default_height: cfg.height,
             default_width: cfg.width,
-            default_prediction_type: cfg.prediction_type,
         })
     }
 
@@ -208,7 +201,7 @@ impl AiyStableDiffusion {
     }
 
     pub fn vae_decode(&self, t: &Tensor) -> Tensor {
-        self.vae_model.decode(&(t / 0.18215))
+        self.vae_model.decode(&(t / self.base_model.scaling_factor()))
     }
 
     fn build_unet(
@@ -225,10 +218,6 @@ impl AiyStableDiffusion {
         Ok(unet)
     }
 
-    fn build_scheduler(n_steps: usize, config: DDIMSchedulerConfig) -> ddim::DDIMScheduler {
-        ddim::DDIMScheduler::new(n_steps, config)
-    }
-
     pub fn text_2_image(
         &self,
         prompt: &str,
@@ -243,13 +232,6 @@ impl AiyStableDiffusion {
     ) -> anyhow::Result<()> {
         let EmbededPrompts { text_embeddings,  pooled_prompt_embeds, negative_pooled_prompt_embeds } = self.embed_prompts(prompt, negative_prompt)?;
         // Scheduler
-        let scheduler_config = ddim::DDIMSchedulerConfig {
-            prediction_type: self
-                .default_prediction_type
-                .unwrap_or(PredictionType::Epsilon),
-            ..Default::default()
-        };
-        // let scheduler = AiyStableDiffusion::build_scheduler(n_steps, scheduler_config);
         let scheduler = self.base_model.scheduler_kind().build(n_steps);
 
         let no_grad_guard = tch::no_grad_guard();

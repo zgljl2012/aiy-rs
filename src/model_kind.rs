@@ -126,4 +126,11 @@ impl ModelKind {
             }),
         }
     }
+
+    pub fn scaling_factor(&self) -> f64 {
+        match &self {
+            ModelKind::SDXL_0_9 => 0.13025,
+            _ => 0.18215
+        }
+    }
 }

@@ -4,9 +4,6 @@ use crate::{
     model_kind::ModelKind,
 };
 
-use crate::schedulers::PredictionType;
-
-
 #[allow(dead_code)]
 pub fn sdv1_5() -> AiyConfig {
     AiyConfig {
@@ -24,7 +21,6 @@ pub fn sdv1_5() -> AiyConfig {
         // width & height
         width: 512,
         height: 512,
-        prediction_type: None
     }
 }
 
@@ -46,7 +42,6 @@ pub fn bra_v6() -> AiyConfig {
         // width & height
         width: 512,
         height: 512,
-        prediction_type: None
     }
 }
 
@@ -68,7 +63,6 @@ pub fn bra_v7() -> AiyConfig {
         // width & height
         width: 512,
         height: 512,
-        prediction_type: None
     }
 }
 
@@ -89,7 +83,6 @@ pub fn sdv2_1() -> AiyConfig {
         // width & height
         width: 768,
         height: 768,
-        prediction_type: Some(PredictionType::VPrediction)
     }
 }
 
@@ -110,6 +103,5 @@ pub fn sdxl_0_9() -> AiyConfig {
         // width & height
         width: 1024,
         height: 1024,
-        prediction_type: Some(PredictionType::Epsilon)
     }
 }
