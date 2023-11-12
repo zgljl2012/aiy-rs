@@ -165,7 +165,9 @@ impl UNet2DConditionModel {
             })
             .collect();
 
+        let mid_depth = config.blocks.last().unwrap().transformer_layers_per_block;
         let mid_cfg = UNetMidBlock2DCrossAttnConfig {
+            depth: mid_depth,
             resnet_eps: config.norm_eps,
             output_scale_factor: config.mid_block_scale_factor,
             cross_attn_dim: config.cross_attention_dim,

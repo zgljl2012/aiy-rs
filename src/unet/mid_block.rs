@@ -85,6 +85,7 @@ pub struct UNetMidBlock2DCrossAttnConfig {
     pub cross_attn_dim: i64,
     pub sliced_attention_size: Option<i64>,
     pub use_linear_projection: bool,
+    pub depth: i64,
 }
 
 impl Default for UNetMidBlock2DCrossAttnConfig {
@@ -98,6 +99,7 @@ impl Default for UNetMidBlock2DCrossAttnConfig {
             cross_attn_dim: 1280,
             sliced_attention_size: None, // Sliced attention disabled
             use_linear_projection: false,
+            depth: 1
         }
     }
 }
@@ -129,7 +131,7 @@ impl UNetMidBlock2DCrossAttn {
         let resnet = ResnetBlock2D::new(&vs_resnets / "0", in_channels, resnet_cfg);
         let n_heads = config.attn_num_head_channels;
         let attn_cfg = SpatialTransformerConfig {
-            depth: 1,
+            depth: config.depth,
             num_groups: resnet_groups,
             context_dim: Some(config.cross_attn_dim),
             sliced_attention_size: config.sliced_attention_size,
