@@ -29,7 +29,7 @@ pub fn device(cpu: bool) -> Result<Device> {
 
 cargo run --example demo2 -- --prompt "a cosmonaut on a horse (hd, realistic, high-def)" --unet-weights data/unet_v2.1.fp16.safetensors --vae-weights data/vae_v2.1.fp16.safetensors --clip-weights data/clip_v2.1.fp16.safetensors --use-f16 --n-steps 10
 cargo run --example demo2 -- --prompt "a cosmonaut on a horse (hd, realistic, high-def)" --unet-weights data/sdxl-base-0.9-unet.safetensors --vae-weights data/sdxl-base-0.9-vae.safetensors --clip-weights data/sdxl-base-0.9-clip.safetensors --use-f16 --sd-version xl --n-steps 10
-
+cargo run --example demo2 -- --prompt "a cosmonaut on a horse (hd, realistic, high-def)" --unet-weights data/sdxl-base-0.9-unet.safetensors --vae-weights data/sdxl-base-0.9-vae.safetensors --clip-weights data/sdxl-base-0.9-clip.safetensors --sd-version xl --n-steps 10
 
 */
 
@@ -316,7 +316,7 @@ fn text_embeddings(
     let uncond_tokens = Tensor::new(uncond_tokens.as_slice(), device)?.unsqueeze(0)?;
 
     println!("Building the Clip transformer.");
-    let mut clip_weights = Some("data/sdxl-base-0.9-clip.safetensors".to_string());
+    let mut clip_weights = Some("data/sdxl-base-0.9-clip.fp16.safetensors".to_string());
     let clip_weights_file = if first {
         ModelFile::Clip
     } else {
@@ -434,11 +434,11 @@ fn run(args: Args) -> Result<()> {
         })
         .collect::<Result<Vec<_>>>()?;
     let text_embeddings = Tensor::cat(&text_embeddings, D::Minus1)?;
-    println!("{text_embeddings:?}");
+    println!("0-TextEmbedding: {text_embeddings}");
 
     println!("Building the autoencoder.");
-    let vae_weights = ModelFile::Vae.get(vae_weights, sd_version, use_f16)?;
-    let vae = sd_config.build_vae(&vae_weights, &device, dtype)?;
+    let vae_weights = ModelFile::Vae.get(vae_weights, sd_version, false)?;
+    let vae = sd_config.build_vae(&vae_weights, &device, DType::F32)?;
     let init_latent_dist = match &img2img {
         None => None,
         Some(image) => {
@@ -456,7 +456,9 @@ fn run(args: Args) -> Result<()> {
         0
     };
     let bsize = 1;
+
     for idx in 0..num_samples {
+        device.set_seed((32 + idx) as u64)?;
         let timesteps = scheduler.timesteps();
         let latents = match &init_latent_dist {
             Some(init_latent_dist) => {
@@ -480,6 +482,8 @@ fn run(args: Args) -> Result<()> {
             }
         };
         let mut latents = latents.to_dtype(dtype)?;
+        println!("1-Latents: {latents}");
+        // latents.save_safetensors("latents", "init-latents.safetensors")?;
 
         println!("starting sampling");
         for (timestep_index, &timestep) in timesteps.iter().enumerate() {
@@ -488,18 +492,20 @@ fn run(args: Args) -> Result<()> {
             }
             let start_time = std::time::Instant::now();
             let latent_model_input = Tensor::cat(&[&latents, &latents], 0)?;
-
             let latent_model_input = scheduler.scale_model_input(latent_model_input, timestep)?;
+            println!("2-LatentsModelInput: {latent_model_input}");
             let noise_pred =
                 unet.forward(&latent_model_input, timestep as f64, &text_embeddings)?;
+            println!("3-noise_pred: {noise_pred}");
             let noise_pred = noise_pred.chunk(2, 0)?;
             let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
             let noise_pred =
                 (noise_pred_uncond + ((noise_pred_text - noise_pred_uncond)? * GUIDANCE_SCALE)?)?;
+            println!("3.5-noise_pred: {noise_pred}");
             latents = scheduler.step(&noise_pred, timestep, &latents)?;
             let dt = start_time.elapsed().as_secs_f32();
             println!("step {}/{n_steps} done, {:.2}s", timestep_index + 1, dt);
-
+            println!("4-latents: {latents}");
             if args.intermediary_images {
                 let image = vae.decode(&(&latents / 0.18215)?)?;
                 let image = ((image / 2.)? + 0.5)?.to_device(&Device::Cpu)?;
@@ -515,11 +521,14 @@ fn run(args: Args) -> Result<()> {
             idx + 1,
             num_samples
         );
+        // println!("kind: {:?}", latents);
+        let latents = latents.to_dtype(DType::F32)?;
+        // println!("kind: {:?}", latents);
         let image = vae.decode(&(&latents / 0.18215)?)?;
-        println!("{}", image);
+        // println!("{}", image);
         let image = ((image / 2.)? + 0.5)?.to_device(&Device::Cpu)?;
         let image = (image.clamp(0f32, 1.)? * 255.)?.to_dtype(DType::U8)?.i(0)?;
-        println!("--------\nimage: {}", image);
+        // println!("--------\nimage: {}", image);
         let image_filename = output_filename(&final_image, idx + 1, num_samples, None);
         candle_examples::save_image(&image, image_filename)?
     }

@@ -72,7 +72,7 @@ impl AutoEncoderKL {
         config: AutoEncoderKLConfig,
         base_model: ModelKind
     ) -> Self {
-        println!("----->>>>>999 {}", config.layers_per_block);
+        // println!("----->>>>>999 {}", config.layers_per_block);
         let latent_channels = config.latent_channels;
         let encoder_cfg = EncoderConfig {
             block_out_channels: config.block_out_channels.clone(),

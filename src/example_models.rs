@@ -98,18 +98,18 @@ pub fn sdxl_0_9() -> AiyConfig {
     AiyConfig {
         vocab_path: "data/bpe_simple_vocab_16e6.txt".to_string(),
         // CLIP
-        clip_weights_path: "data/sdxl-base-0.9-clip.safetensors".to_string(),
+        clip_weights_path: "data/sdxl-base-0.9-clip.fp16.safetensors".to_string(),
         // VAE
-        vae_weights_path: "data/sdxl-base-0.9-vae.safetensors".to_string(),
+        vae_weights_path: "data/sdxl-base-0.9-vae.fp16.safetensors".to_string(),
         vae_fp16: Some(true),
         // UNET
-        unet_weights_path: "data/sdxl-base-0.9-unet.safetensors".to_string(),
+        unet_weights_path: "data/sdxl-base-0.9-unet.fp16.safetensors".to_string(),
         unet_fp16: Some(true),
         // 指定基础模型
         base_model: ModelKind::SDXL_0_9,
         // width & height
-        width: 1024,
-        height: 1024,
-        prediction_type: Some(PredictionType::VPrediction)
+        width: 512,
+        height: 512,
+        prediction_type: Some(PredictionType::Epsilon)
     }
 }
