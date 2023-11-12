@@ -1,6 +1,6 @@
 use tch::{nn::{self, Module}, Tensor};
 
-use crate::{unet::{unet_2d_blocks::{UpDecoderBlock2D, UpDecoderBlock2DConfig}, UNetMidBlock2D, UNetMidBlock2DConfig}, model_kind::ModelKind, utils};
+use crate::{unet::{unet_2d_blocks::{UpDecoderBlock2D, UpDecoderBlock2DConfig}, UNetMidBlock2D, UNetMidBlock2DConfig}, model_kind::ModelKind};
 
 #[derive(Debug, Clone)]
 pub struct DecoderConfig {
@@ -88,10 +88,7 @@ impl Module for Decoder {
         // 经历 mid block
         let mut xs = self.mid_block.forward(&t, None);
         // 依次向上 block
-        let mut i = 0;
         for up_block in self.up_blocks.iter() {
-            println!("--------------------------------------------------------------------------->>>{}, {}", i, utils::has_nan(&xs));
-            i += 1;
             xs = xs.apply(up_block);
         }
         // 卷积且输出图像

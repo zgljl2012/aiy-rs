@@ -312,31 +312,20 @@ impl UNet2DConditionModel {
         let mut emb = (Tensor::ones([bsize], (xs.kind(), device)) * timestep).apply(&self.time_proj).apply(&self.time_embedding);
         match &self.add_embedding {
             Some(add_embedding) => {
-                // println!("--->>>>1 {:?} \n{:?} \n{:?}", emb, add_embedding, encoder_hidden_states);
                 let text_embeds = pooled_prompt_embeds.unwrap();
                 let time_ids = Tensor::concat(&[_get_add_time_ids(), _get_add_time_ids()], 0).to_device(text_embeds.device());
-                // println!("---->>>> 1.1 {}", time_ids);
                 match &self.add_time_proj {
                     Some(add_time_proj) => {
                         let time_embeds = add_time_proj.forward(&time_ids.flatten(0, -1));
-                        // println!("---->>>>1.5 {}", time_embeds);
                         let text_embeds_size = text_embeds.size();
                         let time_embeds = time_embeds.reshape(vec![text_embeds_size.get(0).unwrap().clone(), -1]);
-                        // println!("--->>>2 {} \n{}", text_embeds, time_embeds);
                         let add_embeds = Tensor::concat(&[text_embeds, time_embeds], -1);
                         let add_embeds = add_embeds.to_kind(emb.kind());
-                        // println!("--->>>>3 {}", add_embeds);
                         let aug_emb = add_embedding.forward(&add_embeds);
-                        // println!("--->>>>4 {}", aug_emb);
                         emb = emb + aug_emb;
                     },
                     None => todo!(),
                 }
-
-                // let add_embeds = Tensor::concat()
-                // let aug_emb = add_embedding.forward(encoder_hidden_states);
-                // println!("--->>>>2");
-                // emb = Tensor::concat(&[emb, aug_emb], 0);
             },
             None => {},
         };

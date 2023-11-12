@@ -12,7 +12,7 @@ use tch::nn::Module;
 use tch::{Device, Kind, Tensor};
 
 use crate::unet::unet_2d;
-use crate::utils::{get_device, has_nan};
+use crate::utils::get_device;
 use crate::utils::output_filename;
 
 const GUIDANCE_SCALE: f64 = 7.5;
@@ -185,12 +185,10 @@ impl AiyStableDiffusion {
             // 正向的
             text_embeddings = Tensor::cat(&[cond_embeddings, cond_embeddings2], -1);
 
-            // println!("---->>>>777 size: {:?}", text_embeddings.size());
             // 处理 pooled_prompt_embeds
             let size = text_embeddings.size();
             let bs_embed = size.get(0).unwrap().clone();
             let pooled = pooled.repeat(vec![1, 1]);
-            // println!("---->>>>888 {}, \n{}", pooled, pooled.view_(vec![bs_embed, -1]));
             let pooled = pooled.view_(vec![bs_embed, -1]);
             let uncond_pooled = uncond_pooled.view_(vec![bs_embed, -1]);
             pooled_prompt_embeds = Some(pooled);
@@ -265,33 +263,25 @@ impl AiyStableDiffusion {
             add_text_embeds = Some(Tensor::concat(&[negative_pooled_prompt_embeds.unwrap(), pooled_prompt_embeds.unwrap()], 0));
         }
 
-        println!("0-textembedding: {text_embeddings}");
-
         for idx in 0..num_samples {
             tch::manual_seed(seed + idx);
-            // TODO 不再调试后，删除以下代码，并放开注释
-            // 读取初始 latents
-            let init_latents = Tensor::read_safetensors("./init-latents.safetensors")?;
-            let mut latents = init_latents[0].1.shallow_clone().to_device(self.unet_device).to_kind(kind);
-            // let mut latents = Tensor::randn(
-            //     [
-            //         bsize,
-            //         4,
-            //         (height.unwrap_or(self.default_height) as i64) / 8,
-            //         (width.unwrap_or(self.default_width) as i64) / 8,
-            //     ],
-            //     (kind, self.unet_device),
-            // );
+            let mut latents = Tensor::randn(
+                [
+                    bsize,
+                    4,
+                    (height.unwrap_or(self.default_height) as i64) / 8,
+                    (width.unwrap_or(self.default_width) as i64) / 8,
+                ],
+                (kind, self.unet_device),
+            );
 
             // scale the initial noise by the standard deviation required by the scheduler
             latents *= scheduler.init_noise_sigma();
-            println!("1-Latents: {latents}");
 
             for (timestep_index, &timestep) in scheduler.timesteps().iter().enumerate() {
                 println!("Timestep {timestep_index}/{n_steps}");
                 let latent_model_input = Tensor::cat(&[&latents, &latents], 0);
                 let latent_model_input = scheduler.scale_model_input(latent_model_input, timestep);
-                println!("2-LatentsModelInput: {latent_model_input}");
                 let tm = text_embeddings.to_kind(kind);
                 let noise_pred = self
                     .unet_model
@@ -299,14 +289,11 @@ impl AiyStableDiffusion {
                         Some(t) => Some(t.shallow_clone()),
                         None => None,
                     });
-                println!("3-noise_pred: {noise_pred}");
                 let noise_pred = noise_pred.chunk(2, 0);
                 let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
                 let noise_pred =
                     noise_pred_uncond + (noise_pred_text - noise_pred_uncond) * GUIDANCE_SCALE;
-                println!("3.5-noise_pred: {noise_pred}");
                 latents = scheduler.step(&noise_pred, timestep, &latents);
-                println!("4-latents: {latents}");
                 // 生成中间过程图片
                 if intermediary_images {
                     let latents = latents.to(self.vae_device);
@@ -337,15 +324,10 @@ impl AiyStableDiffusion {
             }
             latents = latents.to_kind(Kind::Float);
 
-            println!("final latents has nan: {}, std: {}", has_nan(&latents), latents.std(true));
             let image = self.vae_decode(&latents);
-            // println!("image1: {}", image);
             let image = image / 2 + 0.5;
-            // println!("image2: {}", image);
             let image = image.clamp(0., 1.).to_device(Device::Cpu);
-            // println!("image3: {}", image);
             let image = (image * 255.).to_kind(Kind::Uint8);
-            println!("image4: {}\n {}", image, image.to_kind(Kind::Float).std(true));
             let final_image = output_filename(&final_image, idx + 1, num_samples, None);
             tch::vision::image::save(&image, final_image)?;
         }

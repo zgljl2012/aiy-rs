@@ -275,7 +275,7 @@ fn text_embeddings(
     prompt: &str,
     uncond_prompt: &str,
     tokenizer: Option<String>,
-    clip_weights: Option<String>,
+    _clip_weights: Option<String>,
     sd_version: StableDiffusionVersion,
     sd_config: &stable_diffusion::StableDiffusionConfig,
     use_f16: bool,
@@ -521,14 +521,10 @@ fn run(args: Args) -> Result<()> {
             idx + 1,
             num_samples
         );
-        // println!("kind: {:?}", latents);
         let latents = latents.to_dtype(DType::F32)?;
-        // println!("kind: {:?}", latents);
         let image = vae.decode(&(&latents / 0.18215)?)?;
-        // println!("{}", image);
         let image = ((image / 2.)? + 0.5)?.to_device(&Device::Cpu)?;
         let image = (image.clamp(0f32, 1.)? * 255.)?.to_dtype(DType::U8)?.i(0)?;
-        // println!("--------\nimage: {}", image);
         let image_filename = output_filename(&final_image, idx + 1, num_samples, None);
         candle_examples::save_image(&image, image_filename)?
     }
