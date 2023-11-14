@@ -13,6 +13,11 @@ use crate::unet::unet_2d;
 use crate::utils::get_device;
 use crate::utils::output_filename;
 
+mod types;
+mod builder;
+
+pub use self::builder::AiySdBuilder;
+
 const GUIDANCE_SCALE: f64 = 7.5;
 
 const PAT: &str =
@@ -40,20 +45,20 @@ struct EmbededPrompts {
 pub struct AiyStableDiffusion {
     // clip
     pub clip_device: Device,
-    clip_model: clip::ClipTextTransformer,
+    pub(crate) clip_model: clip::ClipTextTransformer,
     // vae
     pub vae_device: Device,
-    vae_model: vae::AutoEncoderKL,
-    vae_fp16: bool,
+    pub(crate) vae_model: vae::AutoEncoderKL,
+    pub(crate) vae_fp16: bool,
     // unet
     pub unet_model: unet_2d::UNet2DConditionModel,
     pub unet_device: Device,
-    unet_fp16: bool,
+    pub(crate) unet_fp16: bool,
     // 分词器
-    tokenizer: Tokenizer,
+    pub(crate) tokenizer: Tokenizer,
     // 用于 SDXL
-    tokenizer2: Tokenizer,
-    clip_model2: clip::ClipTextTransformer,
+    pub(crate) tokenizer2: Tokenizer,
+    pub(crate) clip_model2: clip::ClipTextTransformer,
     // 基础模型
     pub base_model: ModelKind,
     // 默认宽高
@@ -263,17 +268,20 @@ impl AiyStableDiffusion {
             // scale the initial noise by the standard deviation required by the scheduler
             latents *= scheduler.init_noise_sigma();
 
+            let tm = text_embeddings.to_kind(kind);
+
             for (timestep_index, &timestep) in scheduler.timesteps().iter().enumerate() {
                 println!("Timestep {timestep_index}/{n_steps}");
                 let latent_model_input = Tensor::cat(&[&latents, &latents], 0);
                 let latent_model_input = scheduler.scale_model_input(latent_model_input, timestep);
-                let tm = text_embeddings.to_kind(kind);
+                println!("--->>> {latent_model_input:?} --- {tm:?}");
                 let noise_pred = self
                     .unet_model
                     .forward(&latent_model_input, timestep as f64, &tm, match &add_text_embeds {
                         Some(t) => Some(t.shallow_clone()),
                         None => None,
                     });
+                println!("---->>>>> UNET END");
                 let noise_pred = noise_pred.chunk(2, 0);
                 let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
                 let noise_pred =

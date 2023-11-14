@@ -39,6 +39,14 @@ impl ModelKind {
         }
     }
 
+    pub fn clip_config2(&self) -> Config {
+        match self {
+            ModelKind::SD1_5 => Config::v1_5(),
+            ModelKind::SD2_1 => Config::v2_1(),
+            ModelKind::SDXL_0_9 => Config::sdxl_v_0_9_encoder2(),
+        }
+    }
+
     pub fn vae_config(&self) -> vae::AutoEncoderKLConfig {
         let autoencoder = vae::AutoEncoderKLConfig {
             block_out_channels: vec![128, 256, 512, 512],
