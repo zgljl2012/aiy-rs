@@ -1,7 +1,6 @@
 use anyhow::Ok;
-use tch::Kind;
 
-use crate::{model_kind::ModelKind, utils::get_device, clip::{self, bpe::Bpe}, vae, unet::unet_2d};
+use crate::{model_kind::ModelKind, utils::get_device, clip::{self, bpe::Bpe}, vae, unet::unet_2d, types::SateTensorsFileKind};
 
 use super::AiyStableDiffusion;
 
@@ -15,9 +14,7 @@ impl AiySdBuilder {
         let mut vs = tch::nn::VarStore::new(device);
         let vae_fp16 = true;
         let unet_fp16 = true;
-        vs.load(file_path)?;
-        vs.half();
-
+        
         // tokenizer
         let bpe = Bpe::new(bpe_file.to_string())?;
         let clip_config = base_model.clip_config();
@@ -26,12 +23,12 @@ impl AiySdBuilder {
         let tokenizer2 = AiyStableDiffusion::create_tokenizer(&bpe, device.clone(), clip_config2.clone())?;
 
         // clip 1
-        let clip_vs_root = vs.root() / "conditioner" / "embedders" / 0;
-        let clip_model_1 = clip::ClipTextTransformer::new(clip_vs_root, &clip_config);
+        let clip_vs_root = vs.root() / "conditioner" / "embedders" / 0 / "transformer";
+        let clip_model_1 = clip::ClipTextTransformer::new(clip_vs_root, SateTensorsFileKind::V0, &clip_config)?;
         
         // clip 2
-        let clip_vs_root = vs.root() / "conditioner" / "embedders" / 1;
-        let clip_model_2 = clip::ClipTextTransformer::new(clip_vs_root, &clip_config2);
+        let clip_vs_root = vs.root() / "conditioner" / "embedders" / 1 / "model";
+        let clip_model_2 = clip::ClipTextTransformer::new(clip_vs_root, SateTensorsFileKind::V1,&clip_config2)?;
 
         // vae
         let vae_model =
@@ -41,6 +38,8 @@ impl AiySdBuilder {
         let in_channels = 4;
         vs.half();
         let unet = unet_2d::UNet2DConditionModel::new(vs.root() / "model" / "diffusion_model", in_channels, 4, base_model.unet_config(), &base_model);
+
+        vs.load(file_path)?;
         Ok(AiyStableDiffusion {
             clip_device: device,
             clip_model: clip_model_1,

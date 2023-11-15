@@ -1,5 +1,20 @@
 # README
 
+## 模型仓库标准
+
+- unet
+    - config.json
+- clip
+    - config.json
+- tokenizer
+    - config.json
+- tokenizer2
+    - config.json
+- clip2
+    - config.json
+- vae
+    - config.json
+
 ## References
 
 - [Tch](https://github.com/LaurentMazare/tch-rs)

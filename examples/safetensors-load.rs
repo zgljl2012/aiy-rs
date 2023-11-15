@@ -34,8 +34,8 @@ fn main() {
     // let path = "data/sdxl-base-0.9-vae.safetensors";
     // let path = "data/unet_v2.1.fp16.safetensors";
     // let path = "data/unet_v2.1.safetensors"; // {"mid_block", "down_blocks", "conv_in", "conv_out", "conv_norm_out", "time_embedding", "up_blocks"}
-    // let path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\sd_xl_base_1.0.safetensors";
-    let path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\sd_xl_base_0.9.f16.safetensors";
+    let path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\sd_xl_base_1.0.safetensors";
+    // let path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\sd_xl_base_0.9.f16.safetensors";
     // let path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\v2-1_768-nonema-pruned.safetensors";
     // LEVEL1: {"model", "cond_stage_model", "first_stage_model"}
     // let path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\v2-1_768-nonema-pruned.safetensors";

@@ -97,6 +97,7 @@ impl UNet2DConditionModel {
         let time_embed_dim = b_channels * 4;
         let conv_cfg = nn::ConvConfig { stride: 1, padding: 1, ..Default::default() };
         let conv_in = nn::conv2d(&vs / "conv_in", in_channels, b_channels, 3, conv_cfg);
+        println!("---->>>> 8888 {:?}", conv_in.ws.kind());
 
         let time_proj =
             Timesteps::new(b_channels, config.flip_sin_to_cos, config.freq_shift, vs.device());

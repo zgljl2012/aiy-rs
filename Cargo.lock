@@ -76,6 +76,7 @@ dependencies = [
  "regex",
  "safetensors 0.4.0",
  "tch",
+ "thiserror",
  "tokenizers 0.14.1",
  "torch-sys",
  "tracing-chrome",

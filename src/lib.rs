@@ -12,3 +12,4 @@ pub mod clip;
 pub mod model_kind;
 pub mod example_models;
 pub mod schedulers;
+pub mod types;

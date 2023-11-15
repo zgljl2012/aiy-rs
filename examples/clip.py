@@ -4,4 +4,5 @@ from transformers import CLIPTextConfig, CLIPTextModel, CLIPTextModelWithProject
 if __name__ == '__main__':
     configuration = CLIPTextConfig()
     model = CLIPTextModel(configuration)
+    CLIPTextModel.from_pretrained
     

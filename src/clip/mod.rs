@@ -18,6 +18,8 @@ pub use config::Config;
 mod activation;
 pub use activation::Activation;
 
+use crate::types::SateTensorsFileKind;
+
 // CLIP Text Model
 // https://github.com/huggingface/transformers/blob/674f750a57431222fa2832503a108df3badf1564/src/transformers/models/clip/modeling_clip.py
 #[derive(Debug)]
@@ -194,13 +196,28 @@ pub struct ClipTextTransformer {
 }
 
 impl ClipTextTransformer {
-    pub fn new(vs: nn::Path, c: &Config) -> Self {
-        let vs = &vs / "text_model";
-        let embeddings = ClipTextEmbeddings::new(&vs / "embeddings", c);
-        let encoder = ClipEncoder::new(&vs / "encoder", c);
+    pub fn new(vs: nn::Path, st_kind: SateTensorsFileKind, c: &Config) -> anyhow::Result<Self> {
+        match st_kind {
+            SateTensorsFileKind::V1 => {
+                ClipTextTransformer::maybe_clip2(vs, c)
+            },
+            SateTensorsFileKind::V0 => {
+                let vs = &vs / "text_model";
+                let embeddings = ClipTextEmbeddings::new(&vs / "embeddings", c);
+                let encoder = ClipEncoder::new(&vs / "encoder", c);
+                let final_layer_norm =
+                    nn::layer_norm(&vs / "final_layer_norm", vec![c.embed_dim], Default::default());
+                Ok(ClipTextTransformer { embeddings, encoder, final_layer_norm })
+            }
+        }
+    }
+
+    fn maybe_clip2(vs: nn::Path, c: &Config) -> anyhow::Result<Self> {
+        let encoder = ClipEncoder::new(&vs / "transformer", c);
         let final_layer_norm =
-            nn::layer_norm(&vs / "final_layer_norm", vec![c.embed_dim], Default::default());
-        ClipTextTransformer { embeddings, encoder, final_layer_norm }
+            nn::layer_norm(&vs / "ln_final", vec![c.embed_dim], Default::default());
+        let embeddings = ClipTextEmbeddings::new(vs, c);
+        Ok(ClipTextTransformer { embeddings, encoder, final_layer_norm })
     }
 
     // https://github.com/huggingface/transformers/blob/674f750a57431222fa2832503a108df3badf1564/src/transformers/models/clip/modeling_clip.py#L678

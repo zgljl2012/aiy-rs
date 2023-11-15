@@ -142,7 +142,7 @@ impl AiyStableDiffusion {
         device: tch::Device,
     ) -> anyhow::Result<clip::ClipTextTransformer> {
         let mut vs = tch::nn::VarStore::new(device);
-        let text_model = clip::ClipTextTransformer::new(vs.root(), clip_config);
+        let text_model = clip::ClipTextTransformer::new(vs.root(), crate::types::SateTensorsFileKind::V0, clip_config)?;
         vs.load(clip_weights)?;
         Ok(text_model)
     }
@@ -267,6 +267,8 @@ impl AiyStableDiffusion {
 
             // scale the initial noise by the standard deviation required by the scheduler
             latents *= scheduler.init_noise_sigma();
+
+            println!("----->>>> {:?}", text_embeddings.kind());
 
             let tm = text_embeddings.to_kind(kind);
 
