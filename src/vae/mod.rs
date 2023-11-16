@@ -3,20 +3,31 @@
 //! Auto-encoder models compress their input to a usually smaller latent space
 //! before expanding it back to its original shape. This results in the latent values
 //! compressing the original information.
+use std::fs;
+
 use crate::model_kind::ModelKind;
 use tch::{nn, Tensor};
 
 use self::{decoder::{Decoder, DecoderConfig}, encoder::{Encoder, EncoderConfig}};
+use serde::{Serialize, Deserialize};
 
 mod decoder;
 mod encoder;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutoEncoderKLConfig {
     pub block_out_channels: Vec<i64>,
     pub layers_per_block: i64,
     pub latent_channels: i64,
     pub norm_num_groups: i64,
+}
+
+impl AutoEncoderKLConfig {
+    pub fn from_file<T: AsRef<std::path::Path>>(path: T) -> anyhow::Result<Self> {
+        let file = fs::read_to_string(path)?;
+        let cfg: AutoEncoderKLConfig = toml::from_str(&file)?;
+        Ok(cfg)
+    }
 }
 
 impl Default for AutoEncoderKLConfig {
@@ -105,5 +116,17 @@ impl AutoEncoderKL {
         let t = xs.apply(&self.post_quant_conv);
         let t2 = t.apply(&self.decoder);
         t2
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::AutoEncoderKLConfig;
+
+    #[test]
+    fn test_load_config() {
+        let cfg = AutoEncoderKLConfig::from_file("src/vae/config.default.toml").unwrap();
+        println!("{:?}", cfg);
     }
 }

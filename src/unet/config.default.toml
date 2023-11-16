@@ -1,0 +1,33 @@
+
+center_input_sample = false
+flip_sin_to_cos = true
+freq_shift = 0.0
+layers_per_block = 2
+
+cross_attention_dim = 2048
+downsample_padding = 1
+
+mid_block_scale_factor = 1.0
+norm_eps = 1e-5
+norm_num_groups = 32
+# ignore
+# sliced_attention_size
+use_linear_projection = true
+
+[[blocks]]
+out_channels = 320
+use_cross_attn = false
+attention_head_dim = 5
+transformer_layers_per_block = 1
+
+[[blocks]]
+out_channels = 640
+use_cross_attn = true
+attention_head_dim = 10
+transformer_layers_per_block = 2
+
+[[blocks]]
+out_channels = 1280
+use_cross_attn = true
+attention_head_dim = 20
+transformer_layers_per_block = 10

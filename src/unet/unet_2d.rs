@@ -2,11 +2,14 @@
 //!
 //! The 2D Unet models take as input a noisy sample and the current diffusion
 //! timestep and return a denoised version of the input.
+use std::fs;
+
 use crate::{embeddings::{TimestepEmbedding, Timesteps}, model_kind::ModelKind};
 use super::{unet_2d_blocks::*, UNetMidBlock2DCrossAttn, UNetMidBlock2DCrossAttnConfig};
 use tch::{nn::{self, Module}, Tensor, Kind};
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct BlockConfig {
     pub out_channels: i64,
     pub use_cross_attn: bool,
@@ -14,7 +17,7 @@ pub struct BlockConfig {
     pub transformer_layers_per_block: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UNet2DConditionModelConfig {
     pub center_input_sample: bool,
     pub flip_sin_to_cos: bool,
@@ -28,6 +31,14 @@ pub struct UNet2DConditionModelConfig {
     pub cross_attention_dim: i64,
     pub sliced_attention_size: Option<i64>,
     pub use_linear_projection: bool,
+}
+
+impl UNet2DConditionModelConfig {
+    pub fn from_file<T: AsRef<std::path::Path>>(path: T) -> anyhow::Result<Self> {
+        let file = fs::read_to_string(path)?;
+        let cfg: UNet2DConditionModelConfig = toml::from_str(&file)?;
+        Ok(cfg)
+    }
 }
 
 impl Default for UNet2DConditionModelConfig {
@@ -97,7 +108,6 @@ impl UNet2DConditionModel {
         let time_embed_dim = b_channels * 4;
         let conv_cfg = nn::ConvConfig { stride: 1, padding: 1, ..Default::default() };
         let conv_in = nn::conv2d(&vs / "conv_in", in_channels, b_channels, 3, conv_cfg);
-        println!("---->>>> 8888 {:?}", conv_in.ws.kind());
 
         let time_proj =
             Timesteps::new(b_channels, config.flip_sin_to_cos, config.freq_shift, vs.device());
@@ -387,5 +397,16 @@ impl UNet2DConditionModel {
         }
         // 6. post-process
         xs.apply(&self.conv_norm_out).silu().apply(&self.conv_out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::UNet2DConditionModelConfig;
+
+    #[test]
+    fn test_load_config() {
+        let cfg = UNet2DConditionModelConfig::from_file("src/unet/config.default.toml").unwrap();
+        println!("{:?}", cfg);
     }
 }

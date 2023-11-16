@@ -268,22 +268,18 @@ impl AiyStableDiffusion {
             // scale the initial noise by the standard deviation required by the scheduler
             latents *= scheduler.init_noise_sigma();
 
-            println!("----->>>> {:?}", text_embeddings.kind());
-
             let tm = text_embeddings.to_kind(kind);
 
             for (timestep_index, &timestep) in scheduler.timesteps().iter().enumerate() {
                 println!("Timestep {timestep_index}/{n_steps}");
                 let latent_model_input = Tensor::cat(&[&latents, &latents], 0);
                 let latent_model_input = scheduler.scale_model_input(latent_model_input, timestep);
-                println!("--->>> {latent_model_input:?} --- {tm:?}");
                 let noise_pred = self
                     .unet_model
                     .forward(&latent_model_input, timestep as f64, &tm, match &add_text_embeds {
                         Some(t) => Some(t.shallow_clone()),
                         None => None,
                     });
-                println!("---->>>>> UNET END");
                 let noise_pred = noise_pred.chunk(2, 0);
                 let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
                 let noise_pred =
