@@ -1,6 +1,7 @@
 use tch::{nn::Module, Tensor};
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum Activation {
     QuickGelu,
     Gelu,

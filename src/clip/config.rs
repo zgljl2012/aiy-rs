@@ -1,6 +1,10 @@
-use super::Activation;
+use std::fs;
 
-#[derive(Debug, Clone)]
+use super::Activation;
+use anyhow::Ok;
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub vocab_size: i64,
     pub embed_dim: i64,         // aka config.hidden_size
@@ -16,6 +20,13 @@ pub struct Config {
 }
 
 impl Config {
+
+    pub fn from_file<T: AsRef<std::path::Path>>(path: T) -> anyhow::Result<Self> {
+        let file = fs::read_to_string(path)?;
+        let cfg: Config = toml::from_str(&file)?;
+        Ok(cfg)
+    }
+
     // The config details can be found in the "text_config" section of this json file:
     // https://huggingface.co/openai/clip-vit-large-patch14/blob/main/config.json
     pub fn v1_5() -> Self {
@@ -74,5 +85,25 @@ impl Config {
             projection_dim: 1280,
             activation: Activation::Gelu,
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_load_from_toml() {
+        let cfg = Config::from_file("src/clip/config.default.toml").unwrap();
+        assert_eq!(cfg.activation, Activation::QuickGelu);
+        assert_eq!(cfg.embed_dim, 768);
+        assert_eq!(cfg.vocab_size, 49408);
+        assert_eq!(cfg.intermediate_size, 3072);
+        assert_eq!(cfg.max_position_embeddings, 77);
+        assert_eq!(cfg.pad_with, Some("!".to_string()));
+        assert_eq!(cfg.num_hidden_layers, 12);
+        assert_eq!(cfg.num_attention_heads, 12);
+        assert_eq!(cfg.projection_dim, 768);
+        println!("{:?}", cfg);
     }
 }

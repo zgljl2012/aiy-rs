@@ -3,19 +3,20 @@
 ## 模型仓库标准
 
 - unet
-    - config.json
+    - config.toml
+    - diffusion_pytorch_model.fp16.safetensors
 - clip
-    - config.json
-- tokenizer
-    - config.json
-- tokenizer2
-    - config.json
+    - config.toml
+    - model.fp16.safetensors
 - clip2
-    - config.json
+    - config.toml
+    - model.fp16.safetensors
 - vae
-    - config.json
+    - config.toml
+    - diffusion_pytorch_model.fp16.safetensors
+- config.toml
 
 ## References
 
 - [Tch](https://github.com/LaurentMazare/tch-rs)
-- [用PyTorch实现MNIST手写数字识别(非常详细)](https://zhuanlan.zhihu.com/p/137571225)
+- [用PyTorch实现MNIST手写数字识别](https://zhuanlan.zhihu.com/p/137571225)
