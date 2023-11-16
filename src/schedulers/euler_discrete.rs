@@ -1,7 +1,8 @@
 use super::{interp, BetaSchedule, PredictionType, types::Scheduler};
 use tch::{kind, Kind, Tensor};
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EulerDiscreteSchedulerConfig {
     /// The value of beta at the beginning of training.
     pub beta_start: f64,

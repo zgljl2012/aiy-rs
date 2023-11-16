@@ -1,0 +1,9 @@
+
+scheduler_name = "EulerDiscreteScheduler"
+
+[scheduler_args]
+beta_start = 0.00085
+beta_end = 0.012
+beta_schedule = "ScaledLinear"
+prediction_type = "Epsilon"
+train_timesteps = 1000

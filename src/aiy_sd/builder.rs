@@ -3,7 +3,7 @@ use std::path::Path;
 use anyhow::Ok;
 use tch::{Device, Kind};
 
-use crate::{model_kind::ModelKind, utils::get_device, clip::{self, bpe::Bpe, Config, ClipTextTransformer}, vae::{self, AutoEncoderKLConfig, AutoEncoderKL}, unet::unet_2d::{self, UNet2DConditionModelConfig, UNet2DConditionModel}, types::SateTensorsFileKind};
+use crate::{model_kind::ModelKind, utils::get_device, clip::{self, bpe::Bpe, Config, ClipTextTransformer}, vae::{self, AutoEncoderKLConfig, AutoEncoderKL}, unet::unet_2d::{self, UNet2DConditionModelConfig, UNet2DConditionModel}, types::SateTensorsFileKind, schedulers::SchedulerKind};
 
 use super::AiyStableDiffusion;
 
@@ -81,9 +81,14 @@ impl AiySdBuilder {
         let unet_config = UNet2DConditionModelConfig::from_file(unet_path.join("config.toml"))?;
         let unet = self.build_unet_model(unet_path.join("diffusion_pytorch_model.fp16.safetensors"), &unet_config)?;
 
+        // scheduler
+        let scheduler_path = repo.join("scheduler");
+        let scheduler_kind = SchedulerKind::from_file(scheduler_path.join("config.toml"))?;
+
         let vae_fp16 = true;
         let unet_fp16 = true;
         Ok(AiyStableDiffusion {
+            scheduler_kind,
             clip_device: self.device,
             clip_model: clip_model,
             vae_device: self.device,
@@ -132,6 +137,7 @@ impl AiySdBuilder {
 
         vs.load(file_path)?;
         Ok(AiyStableDiffusion {
+            scheduler_kind: base_model.scheduler_kind(),
             clip_device: device,
             clip_model: clip_model_1,
             vae_device: device,

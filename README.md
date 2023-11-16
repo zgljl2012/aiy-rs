@@ -14,6 +14,8 @@
 - vae
     - config.toml
     - diffusion_pytorch_model.fp16.safetensors
+- scheduler
+    - config.toml
 - config.toml
 
 ## References

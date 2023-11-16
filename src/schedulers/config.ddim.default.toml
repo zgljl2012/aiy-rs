@@ -1,0 +1,11 @@
+
+scheduler_name = "DDIMScheduler"
+
+[scheduler_args]
+beta_start = 0.00085
+beta_end = 0.012
+beta_schedule = "ScaledLinear"
+eta = 0.0
+steps_offset = 1
+prediction_type = "Epsilon"
+train_timesteps = 1000

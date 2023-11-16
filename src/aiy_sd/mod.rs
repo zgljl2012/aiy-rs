@@ -3,6 +3,7 @@ use std::time::SystemTime;
 use crate::clip;
 use crate::clip::{bpe::Bpe, Config, Tokenizer};
 use crate::model_kind::ModelKind;
+use crate::schedulers::SchedulerKind;
 use crate::vae;
 use anyhow::Ok;
 use regex;
@@ -64,6 +65,8 @@ pub struct AiyStableDiffusion {
     // 默认宽高
     pub default_width: usize,
     pub default_height: usize,
+    // scheduler
+    pub scheduler_kind: SchedulerKind
 }
 
 impl AiyStableDiffusion {
@@ -103,6 +106,7 @@ impl AiyStableDiffusion {
         )?;
         let unet_fp16 = cfg.unet_fp16.unwrap_or(false);
         let vae_fp16 = cfg.vae_fp16.unwrap_or(false);
+        let scheduler_kind = cfg.base_model.scheduler_kind();
         Ok(Self {
             tokenizer,
             tokenizer2,
@@ -118,6 +122,7 @@ impl AiyStableDiffusion {
             base_model: cfg.base_model,
             default_height: cfg.height,
             default_width: cfg.width,
+            scheduler_kind
         })
     }
 
@@ -237,7 +242,7 @@ impl AiyStableDiffusion {
     ) -> anyhow::Result<()> {
         let EmbededPrompts { text_embeddings,  pooled_prompt_embeds, negative_pooled_prompt_embeds } = self.embed_prompts(prompt, negative_prompt)?;
         // Scheduler
-        let scheduler = self.base_model.scheduler_kind().build(n_steps);
+        let scheduler = self.scheduler_kind.build(n_steps);
 
         let no_grad_guard = tch::no_grad_guard();
         let bsize = 1;

@@ -1,6 +1,9 @@
+use std::fs;
+
 use tch::{Tensor, IndexOp, Kind};
 
 use self::{euler_discrete::{EulerDiscreteSchedulerConfig, EulerDiscreteScheduler}, ddim::{DDIMSchedulerConfig, DDIMScheduler}, types::Scheduler};
+use serde::{Serialize, Deserialize};
 
 pub mod ddim;
 pub mod euler_discrete;
@@ -8,7 +11,7 @@ pub mod types;
 
 /// This represents how beta ranges from its minimum value to the maximum
 /// during training.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum BetaSchedule {
     /// Linear interpolation.
     Linear,
@@ -18,7 +21,7 @@ pub enum BetaSchedule {
     SquaredcosCapV2,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum PredictionType {
     Epsilon,
     VPrediction,
@@ -66,12 +69,21 @@ pub fn interp(x: &Tensor, xp: Tensor, yp: Tensor) -> Tensor {
     m.take(&indices) * x + b.take(&indices)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "scheduler_name", content = "scheduler_args")]
 pub enum SchedulerKind {
     EulerDiscreteScheduler(EulerDiscreteSchedulerConfig),
     DDIMScheduler(DDIMSchedulerConfig),
 }
 
 impl SchedulerKind {
+
+    pub fn from_file<T: AsRef<std::path::Path>>(path: T) -> anyhow::Result<Self> {
+        let file = fs::read_to_string(path)?;
+        let cfg: SchedulerKind = toml::from_str(&file)?;
+        Ok(cfg)
+    }
+
     pub fn build(&self, n_steps: usize) -> Box<dyn Scheduler> {
         match &self {
             SchedulerKind::EulerDiscreteScheduler(config) => {
@@ -81,6 +93,23 @@ impl SchedulerKind {
                 Box::new(DDIMScheduler::new(n_steps, config.clone()))
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SchedulerKind;
+
+    #[test]
+    fn test_load_ddim_config() {
+        let cfg = SchedulerKind::from_file("src/schedulers/config.ddim.default.toml").unwrap();
+        println!("{:?}", cfg);
+    }
+
+    #[test]
+    fn test_load_euler_discrete_config() {
+        let cfg = SchedulerKind::from_file("src/schedulers/config.euler_discrete.default.toml").unwrap();
+        println!("{:?}", cfg);
     }
 }
 

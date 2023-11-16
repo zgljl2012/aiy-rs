@@ -9,9 +9,10 @@
 //! https://arxiv.org/abs/2010.02502
 use super::{BetaSchedule, PredictionType, betas_for_alpha_bar, types::Scheduler};
 use tch::{kind, Kind, Tensor};
+use serde::{Serialize, Deserialize};
 
 /// The configuration for the DDIM scheduler.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct DDIMSchedulerConfig {
     /// The value of beta at the beginning of training.
     pub beta_start: f64,
