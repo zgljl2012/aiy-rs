@@ -16,6 +16,7 @@ use crate::utils::output_filename;
 
 mod types;
 mod builder;
+pub mod config;
 
 pub use self::builder::AiySdBuilder;
 

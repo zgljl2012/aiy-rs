@@ -1,0 +1,4 @@
+
+default_width = 1024
+default_height = 1024
+model_kind = "SDXL_0_9"

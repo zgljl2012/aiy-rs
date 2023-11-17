@@ -7,8 +7,10 @@ use crate::{
     vae,
 };
 
+use serde::{Serialize, Deserialize};
+
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ModelKind {
     SD1_5,
     SD2_1,
