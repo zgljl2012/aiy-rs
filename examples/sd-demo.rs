@@ -2,7 +2,7 @@ use std::time::SystemTime;
 
 use aiy_rs::{
     aiy_sd::AiyStableDiffusion,
-    example_models::{bra_v7, sdxl_0_9, sdv2_1, sdv1_5},
+    example_models::{sdxl_0_9, bra_v7},
 };
 
 fn run() -> anyhow::Result<()> {
@@ -13,7 +13,7 @@ fn run() -> anyhow::Result<()> {
 
     let start = SystemTime::now();
 
-    let aiy = AiyStableDiffusion::new(sdxl_0_9())
+    let aiy = AiyStableDiffusion::new(bra_v7())
     .unwrap();
 
     println!(

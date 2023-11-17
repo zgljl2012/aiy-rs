@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use aiy_rs::aiy_sd::AiySdBuilder;
 use clap::Parser;
 
@@ -29,10 +31,10 @@ struct Args {
     #[arg(long, default_value = "9527")]
     seed: usize,
 
-    #[arg(long, default_value = "1024")]
+    #[arg(long, default_value = "0")]
     width: usize,
 
-    #[arg(long, default_value = "1024")]
+    #[arg(long, default_value = "0")]
     height: usize,
 }
 
@@ -49,8 +51,13 @@ fn main() {
         height,
         output,
     } = args;
+    let start = SystemTime::now();
     let builder = AiySdBuilder::new(&aiy_home);
     let aiy = builder.from_repo(&model).unwrap();
+    println!(
+        "=== Device setup: {:?}",
+        SystemTime::now().duration_since(start).unwrap()
+    );
     aiy.text_2_image(
             &prompt,
             &negative_prompt,
@@ -59,7 +66,7 @@ fn main() {
             n_steps,
             1,
             seed as i64,
-            Some(width),
-            Some(height)
+            if width > 0 { Some(width) } else { None },
+            if height > 0 { Some(height) } else { None }
         ).unwrap();
 }

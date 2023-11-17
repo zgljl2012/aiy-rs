@@ -40,6 +40,7 @@ impl AiySdBuilder {
         let mut vs_unet = tch::nn::VarStore::new(self.device);
         let unet = unet_2d::UNet2DConditionModel::new(vs_unet.root(), self.in_channels, 4, cfg.clone(), model_kind);
         vs_unet.load(model_path)?;
+        vs_unet.half();
         Ok(unet)
     }
 
@@ -53,20 +54,27 @@ impl AiySdBuilder {
         let clip2_path = repo.join("clip2");
 
         // aiy_config
-        let aiy_config = AiyBaseConfig::from_file(repo.join("config.toml"))?;
+        let aiy_config_path = repo.join("config.toml");
+        let s = aiy_config_path.clone().to_str().unwrap().to_string();
+        let aiy_config = AiyBaseConfig::from_file(aiy_config_path).expect(format!("{:?} not found", s).as_str());
 
         // toknenizer
         let bpe = Bpe::new(bpe_file.to_str().unwrap().to_string())?;
         let clip_config = Config::from_file(clip_path.join("config.toml"))?;
-        let clip_config2 = Config::from_file(clip2_path.join("config.toml"))?;
         let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, self.device.clone(), clip_config.clone())?;
-        let tokenizer2 = AiyStableDiffusion::create_tokenizer(&bpe, self.device.clone(), clip_config2.clone())?;
+        let mut tokenizer2 = None;
         
         // clip
         let clip_model_path = clip_path.join("model.fp16.safetensors");
         let clip2_model_path = clip2_path.join("model.fp16.safetensors");
         let clip_model = self.build_clip_model(clip_model_path, &clip_config)?;
-        let clip2_model = self.build_clip_model(clip2_model_path, &clip_config2)?;
+        let mut clip2_model = None;
+
+        if aiy_config.model_kind.is_sdxl() {
+            let clip_config2 = Config::from_file(clip2_path.join("config.toml")).expect("clip2/config.toml not found");
+            tokenizer2 = Some(AiyStableDiffusion::create_tokenizer(&bpe, self.device.clone(), clip_config2.clone())?);
+            clip2_model = Some(self.build_clip_model(clip2_model_path, &clip_config2)?);
+        }
 
         // vae
         let vae_path = repo.join("vae");
@@ -75,12 +83,14 @@ impl AiySdBuilder {
 
         // unet
         let unet_path = repo.join("unet");
+        
+        let unet_weights = unet_path.join("diffusion_pytorch_model.fp16.safetensors");
         let unet_config = UNet2DConditionModelConfig::from_file(unet_path.join("config.toml"))?;
-        let unet = self.build_unet_model(unet_path.join("diffusion_pytorch_model.fp16.safetensors"), &aiy_config.model_kind, &unet_config)?;
+        let unet = self.build_unet_model(unet_weights, &aiy_config.model_kind, &unet_config)?;
 
         // scheduler
         let scheduler_path = repo.join("scheduler");
-        let scheduler_kind = SchedulerKind::from_file(scheduler_path.join("config.toml"))?;
+        let scheduler_kind = SchedulerKind::from_file(scheduler_path.join("config.toml")).expect("scheduler/config.toml not found");
 
         let vae_fp16 = true;
         let unet_fp16 = true;

@@ -59,8 +59,8 @@ pub struct AiyStableDiffusion {
     // 分词器
     pub(crate) tokenizer: Tokenizer,
     // 用于 SDXL
-    pub(crate) tokenizer2: Tokenizer,
-    pub(crate) clip_model2: clip::ClipTextTransformer,
+    pub(crate) tokenizer2: Option<Tokenizer>,
+    pub(crate) clip_model2: Option<clip::ClipTextTransformer>,
     // 基础模型
     pub base_model: ModelKind,
     // 默认宽高
@@ -83,13 +83,9 @@ impl AiyStableDiffusion {
             clip_device,
         )?;
         let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, clip_device.clone(), clip_config.clone())?;
-        let clip_config2 = Config::sdxl_v_0_9_encoder2();
-        let tokenizer2 = AiyStableDiffusion::create_tokenizer(&bpe, clip_device.clone(), clip_config2.clone())?;
-        let clip_model2 = AiyStableDiffusion::build_clip_transformer(
-            &clip_config2,
-            "data/sdxl-base-0.9-clip2.fp16.safetensors",
-            clip_device,
-        )?;
+        // let clip_config2 = Config::sdxl_v_0_9_encoder2();
+        let tokenizer2 = None;
+        let clip_model2 = None;
         // VAE
         let vae_model = AiyStableDiffusion::build_vae(
             &cfg.vae_weights_path,
@@ -110,8 +106,8 @@ impl AiyStableDiffusion {
         let scheduler_kind = cfg.base_model.scheduler_kind();
         Ok(Self {
             tokenizer,
-            tokenizer2,
-            clip_model2,
+            tokenizer2: tokenizer2,
+            clip_model2: clip_model2,
             clip_device,
             unet_device,
             clip_model,
@@ -181,11 +177,11 @@ impl AiyStableDiffusion {
         if self.base_model.is_sdxl() {
             let prompt2 = prompt.clone();
             let negative_prompt2 = negative_prompt.clone();
-            let tokens2 = self.tokenizer2.parse_prompt(&prompt2)?;
-            let uncond_tokens2 = self.tokenizer2.parse_prompt(negative_prompt2)?;
-            let cond_embeddings2 = self.clip_model2.forward(&tokens2);
+            let tokens2 = self.tokenizer2.as_ref().unwrap().parse_prompt(&prompt2)?;
+            let uncond_tokens2 = self.tokenizer2.as_ref().unwrap().parse_prompt(negative_prompt2)?;
+            let cond_embeddings2 = self.clip_model2.as_ref().unwrap().forward(&tokens2);
             let pooled = cond_embeddings2.shallow_clone().get(0).get(0);
-            let uncond_embeddings2 = self.clip_model2.forward(&uncond_tokens2);
+            let uncond_embeddings2 = self.clip_model2.as_ref().unwrap().forward(&uncond_tokens2);
             let uncond_pooled = uncond_embeddings2.shallow_clone().get(0).get(0);
 
             // 正向的

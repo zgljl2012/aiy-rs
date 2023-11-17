@@ -49,7 +49,7 @@ pub fn bra_v6() -> AiyConfig {
 #[allow(dead_code)]
 pub fn bra_v7() -> AiyConfig {
     AiyConfig {
-        vocab_path: "data/bpe_simple_vocab_16e6.txt".to_string(),
+        vocab_path: "E://.aiy-repos/__root__/bpe_simple_vocab_16e6.txt".to_string(),
         // CLIP
         clip_weights_path: "data/brav7-clip.safetensors".to_string(),
         // VAE

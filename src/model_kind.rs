@@ -124,7 +124,6 @@ impl ModelKind {
     pub fn scheduler_kind(&self) -> SchedulerKind {
         match &self {
             ModelKind::SDXL_0_9 => SchedulerKind::EulerDiscreteScheduler(EulerDiscreteSchedulerConfig {
-                
                 ..Default::default()
             }),
             ModelKind::SD2_1 => SchedulerKind::DDIMScheduler(DDIMSchedulerConfig {

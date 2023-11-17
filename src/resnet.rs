@@ -87,7 +87,10 @@ impl ResnetBlock2D {
             }
             _ => xs,
         };
+        
         let xs = xs.apply(&self.norm2).silu().apply(&self.conv2);
-        (shortcut_xs + xs) / self.config.output_scale_factor
+        let t = shortcut_xs + xs;
+        let t = t  / self.config.output_scale_factor;
+        t
     }
 }
