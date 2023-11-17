@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn test_sdxl_0_9() {
         let builder = AiySdBuilder::new("E://.aiy-repos");
-        let aiy = builder.from_repo("sdxl-base-0.9").unwrap();
+        let aiy = builder.from_repo("sdxl-base-1.0").unwrap();
         // let bpe_file = "data/bpe_simple_vocab_16e6.txt";
         // let file_path = "D:\\stable diffusion\\stable-diffusion-webui-1.6.0\\models\\Stable-diffusion\\sd_xl_base_0.9.f16.safetensors";
         // let base_model = crate::model_kind::ModelKind::SDXL_0_9;
