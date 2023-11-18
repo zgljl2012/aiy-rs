@@ -271,9 +271,10 @@ impl AiyStableDiffusion {
             latents *= scheduler.init_noise_sigma();
 
             let tm = text_embeddings.to_kind(kind);
+            let mut start_at;
 
             for (timestep_index, &timestep) in scheduler.timesteps().iter().enumerate() {
-                println!("Timestep {timestep_index}/{n_steps}");
+                start_at = SystemTime::now();
                 let latent_model_input = Tensor::cat(&[&latents, &latents], 0);
                 let latent_model_input = scheduler.scale_model_input(latent_model_input, timestep);
                 let noise_pred = self
@@ -301,6 +302,7 @@ impl AiyStableDiffusion {
                     );
                     tch::vision::image::save(&image, final_image)?;
                 }
+                println!("Step {}/{n_steps}, {:?}", timestep_index + 1, SystemTime::now().duration_since(start_at).unwrap());
             }
 
             println!(

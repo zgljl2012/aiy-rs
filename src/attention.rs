@@ -143,8 +143,8 @@ impl CrossAttention {
         }
         // 此时要做一个类型转化，转化为 Float，否则等下计算 softmax 时，可能会出现 NaN 值；
         // 若出现了 NaN 值，后续计算中，正则化会导致所有数据都为 NaN
-        let xs = query
-            .matmul(&(key.transpose(-1, -2) * self.scale))
+        let xs = query.to_kind(Kind::Float)
+            .matmul(&(key.to_kind(Kind::Float).transpose(-1, -2) * self.scale))
             .to_kind(Kind::Float)
             .softmax(-1, Kind::Float)
             .to_kind(kind)
