@@ -13,6 +13,13 @@ struct Args {
     )]
     prompt: String,
 
+    // 如果指定了此参数，则为图生图
+    #[arg(long)]
+    input_image: Option<String>,
+
+    #[arg(long, default_value = "0.8")]
+    strength: f64,
+
     #[arg(long, default_value = "")]
     negative_prompt: String,
 
@@ -50,6 +57,8 @@ fn main() {
         width,
         height,
         output,
+        input_image,
+        strength,
     } = args;
     let start = SystemTime::now();
     let builder = AiySdBuilder::new(&aiy_home);
@@ -58,15 +67,36 @@ fn main() {
         "=== Device setup: {:?}",
         SystemTime::now().duration_since(start).unwrap()
     );
-    aiy.text_2_image(
-            &prompt,
-            &negative_prompt,
-            &output,
-            false,
-            n_steps,
-            1,
-            seed as i64,
-            if width > 0 { Some(width) } else { None },
-            if height > 0 { Some(height) } else { None }
-        ).unwrap();
+    match input_image {
+        Some(input_image) => {
+            println!(">> image-to-image");
+            aiy.image_2_image(
+                &input_image,
+                &prompt,
+                &negative_prompt,
+                &output,
+                false,
+                n_steps,
+                1,
+                seed as i64,
+                Some(strength),
+            )
+            .unwrap();
+        }
+        None => {
+            println!(">> text-to-image");
+            aiy.text_2_image(
+                &prompt,
+                &negative_prompt,
+                &output,
+                false,
+                n_steps,
+                1,
+                seed as i64,
+                if width > 0 { Some(width) } else { None },
+                if height > 0 { Some(height) } else { None },
+            )
+            .unwrap();
+        }
+    };
 }

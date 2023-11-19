@@ -11,7 +11,7 @@ use tch::nn::Module;
 use tch::{Device, Kind, Tensor};
 
 use crate::unet::unet_2d;
-use crate::utils::get_device;
+use crate::utils::{get_device, image_preprocess};
 use crate::utils::output_filename;
 
 mod types;
@@ -269,6 +269,126 @@ impl AiyStableDiffusion {
 
             // scale the initial noise by the standard deviation required by the scheduler
             latents *= scheduler.init_noise_sigma();
+
+            let tm = text_embeddings.to_kind(kind);
+            let mut start_at;
+
+            for (timestep_index, &timestep) in scheduler.timesteps().iter().enumerate() {
+                start_at = SystemTime::now();
+                let latent_model_input = Tensor::cat(&[&latents, &latents], 0);
+                let latent_model_input = scheduler.scale_model_input(latent_model_input, timestep);
+                let noise_pred = self
+                    .unet_model
+                    .forward(&latent_model_input, timestep as f64, &tm, match &add_text_embeds {
+                        Some(t) => Some(t.shallow_clone()),
+                        None => None,
+                    });
+                let noise_pred = noise_pred.chunk(2, 0);
+                let (noise_pred_uncond, noise_pred_text) = (&noise_pred[0], &noise_pred[1]);
+                let noise_pred =
+                    noise_pred_uncond + (noise_pred_text - noise_pred_uncond) * GUIDANCE_SCALE;
+                latents = scheduler.step(&noise_pred, timestep, &latents);
+                // 生成中间过程图片
+                if intermediary_images {
+                    let latents = latents.to(self.vae_device);
+                    let image = self.vae_decode(&latents);
+                    let image = (image / 2 + 0.5).clamp(0., 1.).to_device(Device::Cpu);
+                    let image = (image * 255.).to_kind(Kind::Uint8);
+                    let final_image = output_filename(
+                        &final_image,
+                        idx + 1,
+                        num_samples,
+                        Some(timestep_index + 1),
+                    );
+                    tch::vision::image::save(&image, final_image)?;
+                }
+                println!("Step {}/{n_steps}, {:?}", timestep_index + 1, SystemTime::now().duration_since(start_at).unwrap());
+            }
+
+            println!(
+                "Generating the final image for sample {}/{}.",
+                idx + 1,
+                num_samples
+            );
+            let mut latents = latents.to(self.vae_device);
+            // 如果 unet 是 fp16 且 vae 不是 fp16
+            if self.unet_fp16 && !self.vae_fp16 {
+                latents = latents.to_kind(Kind::Float)
+            } else if self.vae_fp16 && !self.unet_fp16 {
+                latents = latents.to_kind(Kind::Half)
+            }
+            latents = latents.to_kind(Kind::Float);
+
+            let image = self.vae_decode(&latents);
+            let image = image / 2 + 0.5;
+            let image = image.clamp(0., 1.).to_device(Device::Cpu);
+            let image = (image * 255.).to_kind(Kind::Uint8);
+            let final_image = output_filename(&final_image, idx + 1, num_samples, None);
+            tch::vision::image::save(&image, final_image)?;
+        }
+        println!(
+            "=== Generated image: {:?}",
+            SystemTime::now().duration_since(start).unwrap()
+        );
+        drop(no_grad_guard);
+        Ok(())
+    }
+
+
+    pub fn image_2_image(
+        &self,
+        image_path: &str,
+        prompt: &str,
+        negative_prompt: &str,
+        final_image: &str,
+        intermediary_images: bool,
+        n_steps: usize,
+        num_samples: i64,
+        seed: i64,
+        // The strength, indicates how much to transform the initial image. The
+        // value must be between 0 and 1, a value of 1 discards the initial image
+        // information.
+        // default is 0.8
+        strength: Option<f64>,
+        // width: Option<usize>,
+        // height: Option<usize>,
+    ) -> anyhow::Result<()> {
+        let strength = strength.unwrap_or(0.8);
+        if !(0. ..=1.).contains(&strength) {
+            anyhow::bail!("strength should be between 0 and 1, got {strength}")
+        }
+        let init_image = image_preprocess(image_path)?;
+        let EmbededPrompts { text_embeddings,  pooled_prompt_embeds, negative_pooled_prompt_embeds } = self.embed_prompts(prompt, negative_prompt)?;
+        // Scheduler
+        let scheduler = self.scheduler_kind.build(n_steps);
+
+        let no_grad_guard = tch::no_grad_guard();
+        // let bsize = 1;
+        let start = SystemTime::now();
+        let kind = if self.unet_fp16 {
+            Kind::Half
+        } else {
+            Kind::Float
+        };
+
+        let mut add_text_embeds = None;
+        if pooled_prompt_embeds.is_some() {
+            add_text_embeds = Some(Tensor::concat(&[negative_pooled_prompt_embeds.unwrap(), pooled_prompt_embeds.unwrap()], 0));
+        }
+
+        println!("Generating the latent from the input image {:?}.", init_image.size());
+        let init_image = init_image.to(self.vae_device);
+        println!("---->>> {:?}", init_image);
+        let init_latent_dist = self.vae_model.encode(&init_image);
+
+        let t_start = n_steps - (n_steps as f64 * strength) as usize;
+
+        for idx in 0..num_samples {
+            tch::manual_seed(seed + idx);
+            let latents = (init_latent_dist.sample() * self.base_model.scaling_factor()).to(self.unet_device);
+            let timesteps = scheduler.timesteps();
+            let noise = latents.randn_like();
+            let mut latents = scheduler.add_noise(&latents, noise, timesteps[t_start]).to_kind(kind);
 
             let tm = text_embeddings.to_kind(kind);
             let mut start_at;
