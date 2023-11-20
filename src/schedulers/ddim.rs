@@ -7,9 +7,9 @@
 //!
 //! Denoising Diffusion Implicit Models, J. Song et al, 2020.
 //! https://arxiv.org/abs/2010.02502
-use super::{BetaSchedule, PredictionType, betas_for_alpha_bar, types::Scheduler};
+use super::{betas_for_alpha_bar, types::Scheduler, BetaSchedule, PredictionType};
+use serde::{Deserialize, Serialize};
 use tch::{kind, Kind, Tensor};
-use serde::{Serialize, Deserialize};
 
 /// The configuration for the DDIM scheduler.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -63,8 +63,10 @@ impl DDIMScheduler {
     /// during training.
     pub fn new(inference_steps: usize, config: DDIMSchedulerConfig) -> Self {
         let step_ratio = config.train_timesteps / inference_steps;
-        let timesteps: Vec<usize> =
-            (0..(inference_steps)).map(|s| s * step_ratio + config.steps_offset).rev().collect();
+        let timesteps: Vec<usize> = (0..(inference_steps))
+            .map(|s| s * step_ratio + config.steps_offset)
+            .rev()
+            .collect();
         let betas = match config.beta_schedule {
             BetaSchedule::ScaledLinear => Tensor::linspace(
                 config.beta_start.sqrt(),
@@ -83,13 +85,23 @@ impl DDIMScheduler {
         };
         let alphas: Tensor = 1.0 - betas;
         let alphas_cumprod = Vec::<f64>::try_from(alphas.cumprod(0, Kind::Double)).unwrap();
-        Self { alphas_cumprod, timesteps, step_ratio, init_noise_sigma: 1., config }
+        Self {
+            alphas_cumprod,
+            timesteps,
+            step_ratio,
+            init_noise_sigma: 1.,
+            config,
+        }
     }
 }
 
 impl Scheduler for DDIMScheduler {
     fn timesteps(&self) -> Vec<f64> {
-        let arr = self.timesteps.iter().map(|i| i.clone() as f64).collect::<Vec<f64>>();
+        let arr = self
+            .timesteps
+            .iter()
+            .map(|i| i.clone() as f64)
+            .collect::<Vec<f64>>();
         arr
     }
 
@@ -102,9 +114,17 @@ impl Scheduler for DDIMScheduler {
     /// Performs a backward step during inference.
     fn step(&self, model_output: &Tensor, timestep: f64, sample: &Tensor) -> Tensor {
         let timestep = timestep as usize;
-        let timestep = if timestep >= self.alphas_cumprod.len() { timestep - 1 } else { timestep };
+        let timestep = if timestep >= self.alphas_cumprod.len() {
+            timestep - 1
+        } else {
+            timestep
+        };
         // https://github.com/huggingface/diffusers/blob/6e099e2c8ce4c4f5c7318e970a8c093dc5c7046e/src/diffusers/schedulers/scheduling_ddim.py#L195
-        let prev_timestep = if timestep > self.step_ratio { timestep - self.step_ratio } else { 0 };
+        let prev_timestep = if timestep > self.step_ratio {
+            timestep - self.step_ratio
+        } else {
+            0
+        };
 
         let alpha_prod_t = self.alphas_cumprod[timestep];
         let alpha_prod_t_prev = self.alphas_cumprod[prev_timestep];
@@ -146,7 +166,11 @@ impl Scheduler for DDIMScheduler {
 
     fn add_noise(&self, original: &Tensor, noise: Tensor, timestep: f64) -> Tensor {
         let timestep = timestep as usize;
-        let timestep = if timestep >= self.alphas_cumprod.len() { timestep - 1 } else { timestep };
+        let timestep = if timestep >= self.alphas_cumprod.len() {
+            timestep - 1
+        } else {
+            timestep
+        };
         let sqrt_alpha_prod = self.alphas_cumprod[timestep].sqrt();
         let sqrt_one_minus_alpha_prod = (1.0 - self.alphas_cumprod[timestep]).sqrt();
         sqrt_alpha_prod * original + sqrt_one_minus_alpha_prod * noise

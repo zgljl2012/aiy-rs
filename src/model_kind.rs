@@ -93,6 +93,8 @@ impl ModelKind {
                     norm_num_groups: 32,
                     sliced_attention_size,
                     use_linear_projection: true,
+                    // ignore, only sdxl
+                    projection_class_embeddings_input_dim: Some(2816),
                 };
                 return unet;
             }

@@ -29,6 +29,8 @@ impl UNetConfig {
             norm_num_groups: 32,
             sliced_attention_size,
             use_linear_projection: false,
+            // ignore, only sdxl
+            projection_class_embeddings_input_dim: None,
         };
         // v2.1
         // https://huggingface.co/stabilityai/stable-diffusion-2-1/blob/main/unet/config.json
@@ -50,6 +52,8 @@ impl UNetConfig {
             norm_num_groups: 32,
             sliced_attention_size,
             use_linear_projection: true,
+            // ignore, only sdxl
+            projection_class_embeddings_input_dim: None,
         };
         match self {
             UNetConfig::V1_5 => v1_5_unet,

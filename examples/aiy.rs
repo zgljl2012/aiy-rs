@@ -15,10 +15,17 @@ struct Args {
 
     // 如果指定了此参数，则为图生图
     #[arg(long)]
-    input_image: Option<String>,
+    with_input_image: Option<String>,
 
     #[arg(long, default_value = "0.8")]
     strength: f64,
+
+    // 如果指定了此参数，就是指定了 refine-model，需先文生图，再图生图
+    #[arg(long)]
+    with_refine_model: Option<String>,
+
+    #[arg(long, default_value = "15")]
+    refine_steps: usize,
 
     #[arg(long, default_value = "")]
     negative_prompt: String,
@@ -57,8 +64,10 @@ fn main() {
         width,
         height,
         output,
-        input_image,
+        with_input_image,
         strength,
+        with_refine_model,
+        refine_steps,
     } = args;
     let start = SystemTime::now();
     let builder = AiySdBuilder::new(&aiy_home);
@@ -67,7 +76,7 @@ fn main() {
         "=== Device setup: {:?}",
         SystemTime::now().duration_since(start).unwrap()
     );
-    match input_image {
+    match with_input_image {
         Some(input_image) => {
             println!(">> image-to-image");
             aiy.image_2_image(
@@ -97,6 +106,30 @@ fn main() {
                 if height > 0 { Some(height) } else { None },
             )
             .unwrap();
+            match with_refine_model {
+                Some(_model) => {
+                    // 效果不好（代码中对 refine 模型的支持不对，但没有时间改了），暂不实现
+                    todo!()
+                    // let name = output.trim_end_matches(".png");
+                    // let refine_output = format!("{name}_refine.png");
+                    // println!(">> image-to-image with refine model {model}");
+                    // let builder = AiySdBuilder::new(&aiy_home);
+                    // let aiy = builder.from_repo(&model).unwrap();
+                    // aiy.image_2_image(
+                    //     &output,
+                    //     &prompt,
+                    //     &negative_prompt,
+                    //     &refine_output,
+                    //     false,
+                    //     refine_steps,
+                    //     1,
+                    //     seed as i64,
+                    //     Some(strength),
+                    // )
+                    // .unwrap();
+                }
+                None => {}
+            }
         }
     };
 }

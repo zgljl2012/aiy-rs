@@ -2,8 +2,8 @@ use tch::{nn, nn::Module, Device, Tensor};
 
 #[derive(Debug)]
 pub struct TimestepEmbedding {
-    linear_1: nn::Linear,
-    linear_2: nn::Linear,
+    pub linear_1: nn::Linear,
+    pub linear_2: nn::Linear,
 }
 
 impl TimestepEmbedding {
@@ -13,6 +13,10 @@ impl TimestepEmbedding {
         let linear_1 = nn::linear(&vs / "linear_1", channel, time_embed_dim, linear_cfg);
         let linear_2 = nn::linear(&vs / "linear_2", time_embed_dim, time_embed_dim, linear_cfg);
         Self { linear_1, linear_2 }
+    }
+
+    pub fn linear_1_in_features(&self) -> usize {
+        self.linear_1.ws.as_ref().size().last().unwrap().clone() as usize
     }
 }
 

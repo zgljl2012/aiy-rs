@@ -3,9 +3,16 @@ use std::path::Path;
 use anyhow::Ok;
 use tch::{Device, Kind};
 
-use crate::{model_kind::ModelKind, utils::get_device, clip::{bpe::Bpe, Config, ClipTextTransformer}, vae::{self, AutoEncoderKLConfig, AutoEncoderKL}, unet::unet_2d::{self, UNet2DConditionModelConfig, UNet2DConditionModel}, schedulers::SchedulerKind};
+use crate::{
+    clip::{bpe::Bpe, ClipTextTransformer, Config},
+    model_kind::ModelKind,
+    schedulers::SchedulerKind,
+    unet::unet_2d::{self, UNet2DConditionModel, UNet2DConditionModelConfig},
+    utils::get_device,
+    vae::{self, AutoEncoderKL, AutoEncoderKLConfig},
+};
 
-use super::{AiyStableDiffusion, config::AiyBaseConfig};
+use super::{config::AiyBaseConfig, AiyStableDiffusion};
 
 pub struct AiySdBuilder {
     home_dir: String,
@@ -17,17 +24,31 @@ impl AiySdBuilder {
     pub fn new(home_dir: &str) -> Self {
         let device = get_device();
         let in_channels = 4;
-        return Self { home_dir: home_dir.to_string(), device, in_channels }
+        return Self {
+            home_dir: home_dir.to_string(),
+            device,
+            in_channels,
+        };
     }
 
-    fn build_clip_model<T: AsRef<std::path::Path>>(&self, model_path: T, cfg: &Config) -> anyhow::Result<ClipTextTransformer> {
+    fn build_clip_model<T: AsRef<std::path::Path>>(
+        &self,
+        model_path: T,
+        cfg: &Config,
+    ) -> anyhow::Result<ClipTextTransformer> {
         let mut vs = tch::nn::VarStore::new(self.device);
-        let text_model = ClipTextTransformer::new(vs.root(), crate::types::SateTensorsFileKind::V0, cfg)?;
+        let text_model =
+            ClipTextTransformer::new(vs.root(), crate::types::SateTensorsFileKind::V0, cfg)?;
         vs.load(model_path)?;
         Ok(text_model)
     }
 
-    fn build_vae_model<T: AsRef<std::path::Path>>(&self, model_path: T, model_kind: &ModelKind, cfg: &AutoEncoderKLConfig) -> anyhow::Result<AutoEncoderKL> {
+    fn build_vae_model<T: AsRef<std::path::Path>>(
+        &self,
+        model_path: T,
+        model_kind: &ModelKind,
+        cfg: &AutoEncoderKLConfig,
+    ) -> anyhow::Result<AutoEncoderKL> {
         let mut vs_ae = tch::nn::VarStore::new(self.device);
         let autoencoder =
             vae::AutoEncoderKL::new(vs_ae.root(), 3, 3, cfg.clone(), model_kind.clone());
@@ -36,9 +57,20 @@ impl AiySdBuilder {
         Ok(autoencoder)
     }
 
-    fn build_unet_model<T: AsRef<std::path::Path>>(&self, model_path: T, model_kind: &ModelKind, cfg: &UNet2DConditionModelConfig) -> anyhow::Result<UNet2DConditionModel> {
+    fn build_unet_model<T: AsRef<std::path::Path>>(
+        &self,
+        model_path: T,
+        model_kind: &ModelKind,
+        cfg: &UNet2DConditionModelConfig,
+    ) -> anyhow::Result<UNet2DConditionModel> {
         let mut vs_unet = tch::nn::VarStore::new(self.device);
-        let unet = unet_2d::UNet2DConditionModel::new(vs_unet.root(), self.in_channels, 4, cfg.clone(), model_kind);
+        let unet = unet_2d::UNet2DConditionModel::new(
+            vs_unet.root(),
+            self.in_channels,
+            4,
+            cfg.clone(),
+            model_kind,
+        );
         vs_unet.load(model_path)?;
         vs_unet.half();
         Ok(unet)
@@ -56,41 +88,57 @@ impl AiySdBuilder {
         // aiy_config
         let aiy_config_path = repo.join("config.toml");
         let s = aiy_config_path.clone().to_str().unwrap().to_string();
-        let aiy_config = AiyBaseConfig::from_file(aiy_config_path).expect(format!("{:?} not found", s).as_str());
+        let aiy_config =
+            AiyBaseConfig::from_file(aiy_config_path).expect(format!("{:?} not found", s).as_str());
 
         // toknenizer
         let bpe = Bpe::new(bpe_file.to_str().unwrap().to_string())?;
         let clip_config = Config::from_file(clip_path.join("config.toml"))?;
-        let tokenizer = AiyStableDiffusion::create_tokenizer(&bpe, self.device.clone(), clip_config.clone())?;
+        let tokenizer =
+            AiyStableDiffusion::create_tokenizer(&bpe, self.device.clone(), clip_config.clone())?;
         let mut tokenizer2 = None;
-        
+
         // clip
         let clip_model_path = clip_path.join("model.fp16.safetensors");
         let clip2_model_path = clip2_path.join("model.fp16.safetensors");
-        let clip_model = self.build_clip_model(clip_model_path, &clip_config)?;
+        let clip_model = self.build_clip_model(clip_model_path.clone(), &clip_config)?;
         let mut clip2_model = None;
 
         if aiy_config.model_kind.is_sdxl() {
-            let clip_config2 = Config::from_file(clip2_path.join("config.toml")).expect("clip2/config.toml not found");
-            tokenizer2 = Some(AiyStableDiffusion::create_tokenizer(&bpe, self.device.clone(), clip_config2.clone())?);
-            clip2_model = Some(self.build_clip_model(clip2_model_path, &clip_config2)?);
+            // 检测 clip2 是否存在
+            if clip2_path.exists() {
+                let clip_config2 = Config::from_file(clip2_path.join("config.toml"))
+                    .expect("clip2/config.toml not found");
+                tokenizer2 = Some(AiyStableDiffusion::create_tokenizer(
+                    &bpe,
+                    self.device.clone(),
+                    clip_config2.clone(),
+                )?);
+                clip2_model = Some(self.build_clip_model(clip2_model_path, &clip_config2)?);
+            }
         }
 
         // vae
         let vae_path = repo.join("vae");
-        let vae_config = AutoEncoderKLConfig::from_file(vae_path.join("config.toml")).expect("Not found config.toml of VAE");
-        let vae_model = self.build_vae_model(vae_path.join("diffusion_pytorch_model.fp16.safetensors"), &aiy_config.model_kind, &vae_config)?;
+        let vae_config = AutoEncoderKLConfig::from_file(vae_path.join("config.toml"))
+            .expect("Not found config.toml of VAE");
+        let vae_model = self.build_vae_model(
+            vae_path.join("diffusion_pytorch_model.fp16.safetensors"),
+            &aiy_config.model_kind,
+            &vae_config,
+        )?;
 
         // unet
         let unet_path = repo.join("unet");
-        
+
         let unet_weights = unet_path.join("diffusion_pytorch_model.fp16.safetensors");
         let unet_config = UNet2DConditionModelConfig::from_file(unet_path.join("config.toml"))?;
         let unet = self.build_unet_model(unet_weights, &aiy_config.model_kind, &unet_config)?;
 
         // scheduler
         let scheduler_path = repo.join("scheduler");
-        let scheduler_kind = SchedulerKind::from_file(scheduler_path.join("config.toml")).expect("scheduler/config.toml not found");
+        let scheduler_kind = SchedulerKind::from_file(scheduler_path.join("config.toml"))
+            .expect("scheduler/config.toml not found");
 
         let vae_fp16 = true;
         let unet_fp16 = true;
